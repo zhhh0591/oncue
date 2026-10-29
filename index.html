@@ -1,0 +1,2316 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+<style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px/1.4 system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>
+</head>
+<body>
+<title>OnCue</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="手机听对方提问，按你的简历、岗位和公司写出可以照着念的回答。">
+<style>
+/* Layout: a chat thread. Their words arrive as bubbles on the left (the one still being heard forms at the
+   bottom), suggested replies answer on the right, and the newest reply is set large enough to read aloud. */
+:root {
+  --bg: #EDEDED;
+  --bar: #F7F7F7;
+  --card: #FFFFFF;
+  --them: #FFFFFF;
+  --them-ink: #191919;
+  --me: #A3E58F;
+  --me-ink: #0F2A0A;
+  --me-soft: #2F5426;
+  --me-line: rgba(15, 42, 10, .18);
+  --ink: #191919;
+  --muted: #7F7F7F;
+  --faint: #B4B4B4;
+  --line: #E2E2E2;
+  --seg: #E3E3E8;
+  --accent: #138A48;
+  --accent-ink: #0F7A3D;
+  --on-accent: #FFFFFF;
+  --rec: #E5372C;
+  --danger: #D92D20;
+  --danger-wash: #FDE8E7;
+  --tip: #DADADA;
+  --tip-ink: #5E5E5E;
+  --toast: rgba(30, 30, 30, .86);
+  --toast-ink: #FFFFFF;
+  --fill: #FFE380;
+  --fill-ink: #3D2E00;
+  --font: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
+  --read-size: 21px;
+  --gutter-l: max(16px, env(safe-area-inset-left, 0px));
+  --gutter-r: max(16px, env(safe-area-inset-right, 0px));
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111111; --bar: #1B1B1B; --card: #1F1F1F; --them: #2C2C2C; --them-ink: #E9E9E9;
+    --me: #3FAE5E; --me-ink: #04170A; --me-soft: #0B3519; --me-line: rgba(4, 23, 10, .25);
+    --ink: #E9E9E9; --muted: #8E8E8E; --faint: #5E5E5E; --line: #2C2C2C; --seg: #2C2C2E;
+    --accent: #2FB866; --accent-ink: #4CC97E; --on-accent: #04170A; --rec: #FF5A4F;
+    --danger: #FF7A70; --danger-wash: #3A1E1C; --tip: #262626; --tip-ink: #9A9A9A;
+    --toast: rgba(60, 60, 60, .92); --toast-ink: #FFFFFF; --fill: #F2CF5B; --fill-ink: #2B2000;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #111111; --bar: #1B1B1B; --card: #1F1F1F; --them: #2C2C2C; --them-ink: #E9E9E9;
+  --me: #3FAE5E; --me-ink: #04170A; --me-soft: #0B3519; --me-line: rgba(4, 23, 10, .25);
+  --ink: #E9E9E9; --muted: #8E8E8E; --faint: #5E5E5E; --line: #2C2C2C; --seg: #2C2C2E;
+  --accent: #2FB866; --accent-ink: #4CC97E; --on-accent: #04170A; --rec: #FF5A4F;
+  --danger: #FF7A70; --danger-wash: #3A1E1C; --tip: #262626; --tip-ink: #9A9A9A;
+  --toast: rgba(60, 60, 60, .92); --toast-ink: #FFFFFF; --fill: #F2CF5B; --fill-ink: #2B2000;
+  color-scheme: dark;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html { height: 100%; box-sizing: border-box; -webkit-text-size-adjust: 100%; }
+body {
+  height: 100%; margin: 0; overflow: hidden;
+  background: var(--bg); color: var(--ink);
+  font-family: var(--font); font-size: 16px; line-height: 1.5;
+}
+button, input, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+svg { display: block; }
+
+.app { height: 100%; display: flex; flex-direction: column; }
+
+/* Navigation bar */
+.nav {
+  flex: none; display: flex; align-items: center; gap: 6px;
+  padding-block: 4px; padding-left: var(--gutter-l); padding-right: var(--gutter-r);
+  background: var(--bar); border-bottom: 1px solid var(--line);
+}
+.nav-btn {
+  flex: none; width: 36px; height: 44px; padding: 0; border: 0; border-radius: 8px; background: none;
+  display: grid; place-items: center; color: var(--ink);
+}
+.nav-btn svg { width: 24px; height: 24px; }
+.nav-title {
+  flex: 1; min-width: 0; padding: 2px 4px; border: 0; background: none;
+  display: grid; justify-items: center; line-height: 1.3;
+}
+.nav-title b {
+  max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 17px; font-weight: 600;
+}
+.nav-sub { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.dot { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--faint); }
+[data-state="listening"] .dot { background: var(--rec); animation: pulse 1.4s ease-in-out infinite; }
+[data-state="thinking"] .dot { background: var(--accent); }
+@keyframes pulse { 50% { opacity: .3; } }
+.lang {
+  flex: none; height: 30px; min-width: 40px; padding: 0 8px; border-radius: 8px;
+  border: 1px solid var(--line); background: var(--card); font-size: 13px; font-weight: 600;
+}
+
+/* Chat */
+.chat {
+  flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch;
+  padding-block: 14px 18px; padding-left: var(--gutter-l); padding-right: var(--gutter-r);
+}
+.chat-inner { max-width: 720px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+.tip {
+  align-self: center; max-width: 92%; padding: 4px 10px; border-radius: 6px;
+  background: var(--tip); color: var(--tip-ink); font-size: 12.5px; text-align: center;
+}
+.tip button { border: 0; background: none; padding: 0 0 0 6px; color: var(--accent-ink); font-size: inherit; font-weight: 600; }
+.turn { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.bubble {
+  position: relative; max-width: 84%; padding: 9px 12px; border-radius: 6px;
+  font-size: 16px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere;
+}
+.bubble::before {
+  content: ""; position: absolute; top: 13px; width: 10px; height: 10px;
+  background: inherit; border-radius: 1px; transform: rotate(45deg);
+}
+.them { align-self: flex-start; margin-left: 5px; background: var(--them); color: var(--them-ink); }
+.them::before { left: -4px; }
+.me { align-self: flex-end; margin-right: 5px; max-width: 88%; background: var(--me); color: var(--me-ink); }
+.me::before { right: -4px; }
+.me.is-big { font-size: var(--read-size); line-height: 1.45; padding: 11px 14px; }
+.me.is-error { background: var(--danger-wash); color: var(--danger); font-size: 15px; }
+.gloss { display: grid; gap: 2px; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--me-line); color: var(--me-soft); font-size: 14.5px; line-height: 1.5; white-space: normal; }
+.gloss b { font-weight: 700; margin-right: 4px; }
+.caret { display: inline-block; width: 2px; height: 1em; margin-left: 2px; vertical-align: -0.15em; background: currentColor; animation: blink 1s steps(1) infinite; }
+@keyframes blink { 50% { opacity: 0; } }
+.typing { display: inline-flex; align-items: center; gap: 5px; padding: 15px 16px; }
+.typing i { width: 7px; height: 7px; border-radius: 50%; background: var(--me-ink); opacity: .3; animation: bounce 1.2s infinite; }
+.typing i:nth-child(2) { animation-delay: .15s; }
+.typing i:nth-child(3) { animation-delay: .3s; }
+@keyframes bounce { 30% { opacity: .85; transform: translateY(-3px); } }
+.caption { margin: -4px 0 0 10px; font-size: 12px; color: var(--muted); }
+.q-main { display: block; font-weight: 600; }
+.q-raw { display: block; margin-top: 4px; font-size: 13px; line-height: 1.45; color: var(--muted); }
+.opener { display: block; font-weight: 600; }
+mark.fill { padding: 0 3px; border-radius: 4px; background: var(--fill); color: var(--fill-ink); }
+.cues { display: block; margin-top: 8px; font-size: .9em; line-height: 1.5; }
+.prep-list { display: grid; gap: 12px; }
+.group textarea.prep-q { font-weight: 600; resize: none; }
+.group > .prep-zh { margin: -6px 0 0; padding: 0 14px 10px; border-top: 0; font-size: 13px; color: var(--muted); }
+.group textarea.prep-a { min-height: 120px; }
+.meta {
+  align-self: flex-end; display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 2px 12px;
+  margin: -2px 6px 0 0; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums;
+}
+.meta button { border: 0; background: none; padding: 6px 2px; font-size: 13px; font-weight: 600; color: var(--accent-ink); }
+.them.is-live { color: var(--muted); }
+.them.is-live .held { color: var(--them-ink); }
+.them.is-live::after { content: " …"; animation: blink 1s steps(1) infinite; }
+
+.welcome { display: flex; flex-direction: column; gap: 14px; }
+.setup { display: grid; padding: 18px 16px 6px; border-radius: 12px; background: var(--card); }
+.setup h1 { margin: 0; font-size: 28px; font-weight: 700; letter-spacing: -.01em; }
+.setup .lede { margin: 4px 0 12px; color: var(--muted); font-size: 15px; text-wrap: pretty; }
+.setup-row {
+  display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 0;
+  border: 0; border-top: 1px solid var(--line); background: none; text-align: left;
+}
+.setup-row > span:nth-child(2) { flex: 1; min-width: 0; }
+.setup-row b { display: block; font-size: 16px; font-weight: 600; }
+.setup-row small { display: block; font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+.setup-row .go { flex: none; color: var(--faint); }
+.setup-row .go svg { width: 18px; height: 18px; }
+.check { flex: none; width: 22px; height: 22px; border-radius: 50%; border: 1.5px solid var(--faint); display: grid; place-items: center; }
+.check.is-done { border-color: var(--accent); background: var(--accent); color: var(--on-accent); }
+.check svg { width: 14px; height: 14px; }
+
+/* Input bar */
+.inputbar {
+  flex: none; position: relative; display: flex; align-items: flex-end; gap: 8px;
+  padding-block: 8px; padding-left: var(--gutter-l); padding-right: var(--gutter-r);
+  background: var(--bar); border-top: 1px solid var(--line);
+}
+.ib-icon { flex: none; width: 36px; height: 44px; padding: 0; border: 0; background: none; display: grid; place-items: center; color: var(--ink); }
+.ib-icon svg { width: 28px; height: 28px; }
+.listen {
+  flex: 1; min-width: 0; height: 44px; border: 0; border-radius: 8px; background: var(--card);
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  font-size: 16px; font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.listen[aria-pressed="true"] { color: var(--rec); }
+.listen svg { width: 20px; height: 20px; }
+#say {
+  flex: 1; min-width: 0; height: 44px; max-height: 96px; resize: none; border: 0; border-radius: 8px;
+  background: var(--card); padding: 10px 12px; font-size: 16px; line-height: 1.5;
+}
+#say::placeholder { color: var(--faint); }
+.send { flex: none; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 50%; background: var(--accent); color: var(--on-accent); display: grid; place-items: center; }
+.send svg { width: 22px; height: 22px; }
+.toast {
+  position: absolute; left: 50%; bottom: calc(100% + 10px); transform: translateX(-50%);
+  width: max-content; max-width: calc(100% - 32px); padding: 8px 14px; border-radius: 8px;
+  background: var(--toast); color: var(--toast-ink); font-size: 14px; text-align: center;
+  pointer-events: none; opacity: 0; transition: opacity .2s;
+}
+.toast.is-on { opacity: 1; }
+
+/* Sheets */
+dialog.sheet {
+  width: 100%; max-width: 640px; height: 100%; max-height: 100%; margin: 0 auto; padding: 0; border: 0;
+  background: var(--bg); color: var(--ink);
+}
+dialog.sheet[open] { display: flex; flex-direction: column; }
+dialog.sheet::backdrop { background: rgba(0, 0, 0, .45); }
+.sheet-head {
+  flex: none; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 8px;
+  padding-top: calc(env(safe-area-inset-top, 0px) + 8px); padding-bottom: 8px;
+  padding-left: var(--gutter-l); padding-right: var(--gutter-r);
+  background: var(--bar); border-bottom: 1px solid var(--line);
+}
+.sheet-head h2 { grid-column: 2; margin: 0; font-size: 17px; font-weight: 600; }
+.sheet-head .done {
+  grid-column: 3; justify-self: end; height: 34px; padding: 0 14px; border: 0; border-radius: 8px;
+  background: var(--accent); color: var(--on-accent); font-size: 15px; font-weight: 600;
+}
+.sheet-body {
+  flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
+  padding-block: 16px calc(env(safe-area-inset-bottom, 0px) + 32px); padding-left: var(--gutter-l); padding-right: var(--gutter-r);
+  display: grid; align-content: start; gap: 22px;
+}
+.section { display: grid; gap: 6px; min-width: 0; }
+.section-title, .section-foot { margin: 0 4px; font-size: 13px; color: var(--muted); }
+.section-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin: 0 4px; }
+.section-head .section-title { margin: 0; }
+.group { border-radius: 12px; overflow: hidden; background: var(--card); }
+.group > * + * { border-top: 1px solid var(--line); }
+.row { display: flex; align-items: center; gap: 12px; min-height: 50px; padding: 6px 14px; }
+.row > label, .row > .row-label { flex: none; font-size: 16px; }
+.row input[type="text"], .row input[type="password"] {
+  flex: 1; min-width: 0; border: 0; background: none; padding: 8px 0; font-size: 16px; text-align: right;
+}
+.row input::placeholder, .group textarea::placeholder { color: var(--faint); }
+.row.stack { flex-direction: column; align-items: stretch; gap: 8px; padding: 12px 14px; }
+.row small { display: block; font-size: 13px; color: var(--muted); }
+.group textarea {
+  display: block; width: 100%; border: 0; background: none; padding: 12px 14px;
+  font-size: 16px; line-height: 1.55; resize: vertical;
+}
+.row-btn {
+  display: flex; align-items: center; justify-content: center; width: 100%; min-height: 50px; padding: 0 14px;
+  border: 0; background: none; font-size: 16px; color: var(--accent-ink);
+}
+.row-btn.danger { color: var(--danger); }
+.link-btn { border: 0; background: none; padding: 2px 0; color: var(--accent-ink); font-size: 14px; font-weight: 600; }
+.seg { flex: 1; display: flex; padding: 2px; border-radius: 9px; background: var(--seg); }
+.seg label { flex: 1; position: relative; min-width: 0; }
+.seg input { position: absolute; opacity: 0; pointer-events: none; }
+.seg span { display: block; padding: 7px 4px; border-radius: 7px; text-align: center; font-size: 14px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.seg input:checked + span { background: var(--card); font-weight: 600; box-shadow: 0 1px 3px rgba(0, 0, 0, .14); }
+.seg input:focus-visible + span { outline: 2px solid var(--accent); }
+.toggle { justify-content: space-between; cursor: pointer; }
+.toggle > span { min-width: 0; }
+.toggle input {
+  flex: none; appearance: none; -webkit-appearance: none; position: relative; width: 51px; height: 31px; margin: 0;
+  border-radius: 999px; background: var(--seg); cursor: pointer; transition: background .15s;
+}
+.toggle input::after {
+  content: ""; position: absolute; top: 2px; left: 2px; width: 27px; height: 27px; border-radius: 50%;
+  background: #FFFFFF; box-shadow: 0 2px 4px rgba(0, 0, 0, .2); transition: transform .15s;
+}
+.toggle input:checked { background: var(--accent); }
+.toggle input:checked::after { transform: translateX(20px); }
+.pick { cursor: pointer; }
+.pick > span { flex: 1; min-width: 0; }
+.pick b { display: block; font-size: 16px; font-weight: 500; }
+.pick input {
+  flex: none; appearance: none; -webkit-appearance: none; width: 22px; height: 22px; margin: 0;
+  border-radius: 50%; border: 1.5px solid var(--faint);
+}
+.pick input:checked { border-color: var(--accent); background: var(--accent); box-shadow: inset 0 0 0 4px var(--card); }
+.upload-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; padding: 10px 14px; }
+.upload-row button { border: 0; background: none; padding: 4px 0; color: var(--accent-ink); font-size: 15px; font-weight: 600; }
+.upload-status { flex: 1 1 160px; min-width: 0; font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+input[type="range"] { width: 100%; accent-color: var(--accent); }
+.size-demo { align-self: flex-end; margin: 4px 5px 4px 0; font-size: var(--read-size); line-height: 1.45; }
+.key-show { flex: none; border: 0; background: none; padding: 4px 0; color: var(--accent-ink); font-size: 14px; font-weight: 600; }
+
+.new-row { gap: 12px; justify-content: flex-start; color: var(--accent-ink); font-weight: 600; }
+.new-row svg { width: 22px; height: 22px; }
+.chat-row { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 14px; border: 0; background: none; text-align: left; }
+.avatar { flex: none; width: 44px; height: 44px; border-radius: 8px; display: grid; place-items: center; color: #FFFFFF; font-size: 18px; font-weight: 600; }
+.cr-main { flex: 1; min-width: 0; display: grid; }
+.cr-main b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 16px; font-weight: 600; }
+.cr-main small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; color: var(--muted); }
+.cr-side { flex: none; display: grid; justify-items: end; gap: 4px; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.cr-side .now { color: var(--accent-ink); font-weight: 600; }
+
+@media (prefers-reduced-motion: reduce) {
+  [data-state="listening"] .dot, .caret, .typing i, .them.is-live::after { animation: none; }
+  .toast, .toggle input, .toggle input::after { transition: none; }
+}
+</style>
+
+<div class="app" id="app">
+  <header class="nav">
+    <button type="button" class="nav-btn" id="listBtn" aria-label="所有对话">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>
+    </button>
+    <button type="button" class="nav-title" id="titleBtn" aria-label="这场对话的资料">
+      <b id="convoName">未命名对话</b>
+      <span class="nav-sub" id="status" data-state="idle"><span class="dot" aria-hidden="true"></span><span id="statusText">待机</span></span>
+    </button>
+    <button type="button" class="lang" id="langBtn" aria-label="对方说的语言">EN</button>
+    <button type="button" class="nav-btn" id="settingsBtn" aria-label="设置">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+    </button>
+  </header>
+
+  <main class="chat" id="chat">
+    <div class="chat-inner" id="chatInner"></div>
+  </main>
+
+  <footer class="inputbar">
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <button type="button" class="ib-icon" id="modeBtn" aria-label="改用打字"></button>
+    <button type="button" class="ib-icon" id="clearBtn" aria-label="清空输入框" hidden>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M9 9l6 6M15 9l-6 6"/></svg>
+    </button>
+    <button type="button" class="listen" id="listenBtn" aria-pressed="false"></button>
+    <textarea id="say" rows="1" enterkeyhint="send" autocomplete="off" placeholder="点这里，再点键盘上的麦克风听写" hidden></textarea>
+    <button type="button" class="send" id="sendBtn" aria-label="立即回答">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+    </button>
+  </footer>
+</div>
+
+<dialog class="sheet" id="convosSheet" aria-labelledby="convosTitle">
+  <div class="sheet-head">
+    <h2 id="convosTitle">所有对话</h2>
+    <button type="button" class="done" data-close>完成</button>
+  </div>
+  <div class="sheet-body">
+    <div class="group">
+      <button type="button" class="row row-btn new-row" id="newConvoBtn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>新建对话
+      </button>
+    </div>
+    <div class="section">
+      <div class="group" id="convoList"></div>
+      <p class="section-foot">每场面试建一个对话，填上公司、岗位和职位描述。回答按这个对话的资料来写，问答记录也分开保存。</p>
+    </div>
+  </div>
+</dialog>
+
+<dialog class="sheet" id="convoSheet" aria-labelledby="convoTitle">
+  <div class="sheet-head">
+    <h2 id="convoTitle">对话资料</h2>
+    <button type="button" class="done" data-close>完成</button>
+  </div>
+  <div class="sheet-body">
+    <div class="section">
+      <p class="section-title">岗位</p>
+      <div class="group">
+        <div class="row"><label for="cCompany">公司</label><input id="cCompany" type="text" autocomplete="off" placeholder="Amazon"></div>
+        <div class="row"><label for="cRole">岗位</label><input id="cRole" type="text" autocomplete="off" placeholder="Hardware Engineering Co-op"></div>
+      </div>
+    </div>
+    <div class="section">
+      <p class="section-title">职位描述（JD）</p>
+      <div class="group"><textarea id="cJd" rows="6" aria-label="职位描述" placeholder="从招聘页面整段复制过来"></textarea></div>
+      <p class="section-foot">回答会尽量对上里面写的要求。</p>
+    </div>
+    <div class="section">
+      <p class="section-title">这次谈话的备注</p>
+      <div class="group"><textarea id="cNotes" rows="3" aria-label="备注" placeholder="第二轮技术面，面试官是硬件经理；问到项目时多讲机器人队"></textarea></div>
+    </div>
+    <div class="section">
+      <p class="section-title" id="cResumeT">简历</p>
+      <div class="group">
+        <div class="row">
+          <div class="seg" role="radiogroup" aria-labelledby="cResumeT">
+            <label><input type="radio" name="cOwnResume" value="0"><span>用通用简历</span></label>
+            <label><input type="radio" name="cOwnResume" value="1"><span>这场单独一份</span></label>
+          </div>
+        </div>
+        <textarea id="cResume" rows="9" aria-label="这场对话用的简历" placeholder="粘贴为这个岗位改过的简历，或者上传文件" hidden></textarea>
+        <div class="upload-row" id="cUploadRow" hidden>
+          <button type="button" id="cUpload">上传 PDF / Word / 文本</button>
+          <span class="upload-status" id="cUploadStatus"></span>
+        </div>
+      </div>
+      <p class="section-foot" id="cResumeFoot">通用简历在「设置」里填写，所有对话共用。</p>
+    </div>
+    <div class="section">
+      <p class="section-title">面试准备</p>
+      <div class="group"><button type="button" class="row-btn" id="cOpenPrep">打开面试准备</button></div>
+      <p class="section-foot" id="cPrepFoot"></p>
+    </div>
+    <div class="group">
+      <button type="button" class="row-btn" id="cClearTurns">清空这场对话的问答</button>
+      <button type="button" class="row-btn danger" id="cDelete">删除这场对话</button>
+    </div>
+  </div>
+</dialog>
+
+<dialog class="sheet" id="prepSheet" aria-labelledby="prepTitle">
+  <div class="sheet-head">
+    <h2 id="prepTitle">面试准备</h2>
+    <button type="button" class="done" data-close>完成</button>
+  </div>
+  <div class="sheet-body">
+    <div class="section">
+      <div class="group"><button type="button" class="row-btn" id="prepGen">根据简历和 JD 生成预测问题</button></div>
+      <p class="section-foot" id="prepStatus"></p>
+    </div>
+    <div class="section">
+      <p class="section-title">预测问题和你的回答</p>
+      <div class="prep-list" id="prepList"></div>
+      <div class="group"><button type="button" class="row-btn" id="prepAdd">添加一个问题</button></div>
+      <p class="section-foot">黄色的 [填：…] 是简历里没写的细节，换成你的真实情况。面试时问到和这里很像的问题，会直接显示你改过的回答，不用等；其他问题也会参考这些内容来写。</p>
+    </div>
+    <div class="section">
+      <p class="section-title">你的核心故事</p>
+      <div class="group"><textarea id="prepStories" rows="8" aria-label="核心故事" placeholder="生成后会列出最适合这个岗位的几段经历，可以直接改"></textarea></div>
+    </div>
+  </div>
+</dialog>
+
+<dialog class="sheet" id="settings" aria-labelledby="settingsTitle">
+  <div class="sheet-head">
+    <h2 id="settingsTitle">设置</h2>
+    <button type="button" class="done" data-close>完成</button>
+  </div>
+  <div class="sheet-body">
+    <div class="section">
+      <div class="section-head"><p class="section-title">我的简历（所有对话通用）</p><button type="button" class="link-btn" id="tplBtn">插入模板</button></div>
+      <div class="group">
+        <textarea id="profile" rows="10" aria-label="我的简历" placeholder="Northeastern 电子工程大二。机器人队负责电机控制固件（STM32、C），把电机响应时间从 120ms 降到 40ms。想找嵌入式方向的 co-op。"></textarea>
+        <div class="upload-row">
+          <button type="button" id="pUpload">上传 PDF / Word / 文本</button>
+          <span class="upload-status" id="pUploadStatus"></span>
+        </div>
+      </div>
+      <p class="section-foot">回答只会用这里写的事实。写得越具体（做过什么、你的角色、结果和数字），回答越像你本人。</p>
+    </div>
+
+    <div class="section">
+      <p class="section-title">听和说</p>
+      <div class="group">
+        <div class="row stack">
+          <span class="row-label" id="hearLangT">对方说的语言</span>
+          <div class="seg" role="radiogroup" aria-labelledby="hearLangT">
+            <label><input type="radio" name="hearLang" value="en-US"><span>English</span></label>
+            <label><input type="radio" name="hearLang" value="zh-CN"><span>中文</span></label>
+          </div>
+        </div>
+        <div class="row stack">
+          <span class="row-label" id="replyLangT">回答用的语言</span>
+          <div class="seg" role="radiogroup" aria-labelledby="replyLangT">
+            <label><input type="radio" name="replyLang" value="same"><span>跟对方一样</span></label>
+            <label><input type="radio" name="replyLang" value="en"><span>English</span></label>
+            <label><input type="radio" name="replyLang" value="zh"><span>中文</span></label>
+          </div>
+        </div>
+        <div class="row stack">
+          <span class="row-label" id="lengthT">回答长度</span>
+          <div class="seg" role="radiogroup" aria-labelledby="lengthT">
+            <label><input type="radio" name="length" value="short"><span>简短</span></label>
+            <label><input type="radio" name="length" value="medium"><span>适中</span></label>
+            <label><input type="radio" name="length" value="long"><span>详细</span></label>
+          </div>
+        </div>
+        <div class="row stack">
+          <span class="row-label" id="styleT">回答形式</span>
+          <div class="seg" role="radiogroup" aria-labelledby="styleT">
+            <label><input type="radio" name="style" value="hybrid"><span>开口句+要点</span></label>
+            <label><input type="radio" name="style" value="script"><span>整段照念</span></label>
+            <label><input type="radio" name="style" value="points"><span>只给要点</span></label>
+          </div>
+        </div>
+        <label class="row toggle"><span>附中文意思<small>英文回答下面加一行中文意思</small></span><input type="checkbox" id="gloss" role="switch"></label>
+      </div>
+      <p class="section-foot">一般问题按念出来的时间：简短约 15 秒，适中约 30–45 秒，详细约 1 分钟。需要展开的问题（介绍经历或项目、讲一次具体经历、解释技术问题、一次问好几个）会自动答得更长：适中约 1–1.5 分钟，详细约 2 分钟。闲聊和是非题会自动答短。</p>
+    </div>
+
+    <div class="section">
+      <p class="section-title">自动回答</p>
+      <div class="group">
+        <label class="row toggle"><span>听到问题自动回答<small>对方只是在介绍情况时会先等着</small></span><input type="checkbox" id="auto" role="switch"></label>
+        <div class="row stack">
+          <span class="row-label" id="pauseT">停顿多久算说完</span>
+          <div class="seg" role="radiogroup" aria-labelledby="pauseT">
+            <label><input type="radio" name="pause" value="1"><span>1 秒</span></label>
+            <label><input type="radio" name="pause" value="1.4"><span>1.4 秒</span></label>
+            <label><input type="radio" name="pause" value="2.5"><span>2.5 秒</span></label>
+          </div>
+        </div>
+      </div>
+      <p class="section-foot">对方说话爱停顿，就选长一点，免得问题没说完就开始回答。</p>
+    </div>
+
+    <div class="section">
+      <p class="section-title">回答字号 <span id="fontSizeOut"></span></p>
+      <div class="group">
+        <div class="row stack">
+          <input type="range" id="fontSize" min="16" max="36" step="1" aria-label="回答字号">
+          <p class="bubble me size-demo">Sure — I'd be happy to talk about that.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="section" id="engineApi" hidden>
+      <p class="section-title">模型</p>
+      <div class="group">
+        <label class="row pick"><span><b>Claude Haiku 5.5</b><small>最快、最便宜（推荐）</small></span><input type="radio" name="model" value="claude-haiku-5-5"></label>
+        <label class="row pick"><span><b>Claude Sonnet 5.5</b><small>稍慢一点，回答更有深度</small></span><input type="radio" name="model" value="claude-sonnet-5-5"></label>
+        <label class="row pick"><span><b>Claude Opus 5.5</b><small>最聪明，但最慢</small></span><input type="radio" name="model" value="claude-opus-5-5"></label>
+        <div class="row"><label for="apiKey">API Key</label><input id="apiKey" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="sk-ant-…"><button type="button" class="key-show" id="keyShow">显示</button></div>
+      </div>
+      <p class="section-foot">在 console.anthropic.com 的 API Keys 页面创建。Key 只保存在这台设备的浏览器里，请求从这里直接发给 Anthropic。</p>
+    </div>
+
+    <div class="section" id="engineSample" hidden>
+      <p class="section-title">回答速度</p>
+      <div class="group">
+        <label class="row pick"><span><b>快</b><small>推荐，一两秒出字</small></span><input type="radio" name="tier" value="quick"></label>
+        <label class="row pick"><span><b>更周到</b><small>要等 5 秒以上</small></span><input type="radio" name="tier" value="default"></label>
+      </div>
+      <p class="section-foot">用你登录的 Claude 账号写回答，不需要 API Key。</p>
+    </div>
+
+    <p class="section-foot" id="privacyNote"></p>
+  </div>
+</dialog>
+
+<input type="file" id="fileInput" accept=".pdf,.docx,.txt,.md,application/pdf,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document" hidden>
+
+<script>
+(() => {
+  'use strict';
+
+  const PREFS_KEY = 'suiwen.prefs.v1';
+  const CONVOS_KEY = 'suiwen.convos.v1';
+  const OLD_TURNS_KEY = 'suiwen.turns.v1';
+  const APIKEY_KEY = 'suiwen.apikey.v1';
+  const SDK_URL = 'https://cdn.jsdelivr.net/npm/@anthropic-ai/sdk@0.133.0/+esm';
+  const PDFJS_URL = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+  const PDFJS_WORKER_URL = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  const MAMMOTH_URL = 'https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js';
+  const STANDALONE_URL = 'https://zhhh0591.github.io/oncue/';
+  const IN_CLAUDE = !!(window.claude && typeof window.claude.use === 'function');
+  const UA = navigator.userAgent;
+  const IS_ANDROID = /Android/i.test(UA);
+  const IS_IOS = /iPhone|iPad|iPod/i.test(UA) || (/Macintosh/.test(UA) && navigator.maxTouchPoints > 1);
+  const IS_MOBILE = IS_ANDROID || IS_IOS;
+  const MERGE_GAP_MS = 2500;   // speech that starts this soon after a question ended is the rest of that question
+  const HISTORY_MS = 45 * 60 * 1000;
+  const HISTORY_TURNS = 10;
+  const MAX_TURNS = 40;
+  const MAX_TEXT = 20000;
+
+  const MODELS = {
+    'claude-opus-5-5': { label: 'Opus 5.5', params: { output_config: { effort: 'low' } }, fallback: true },
+    'claude-sonnet-5-5': { label: 'Sonnet 5.5', params: { thinking: { type: 'between_tools' }, output_config: { effort: 'low' } }, fallback: true },
+    'claude-haiku-5-5': { label: 'Haiku 5.5', params: { thinking: { type: 'disabled' }, output_config: { effort: 'low' } }, fallback: false },
+  };
+
+  const DEFAULTS = {
+    profile: '', activeId: '',
+    hearLang: 'en-US', replyLang: 'same', length: 'medium', style: 'hybrid',
+    gloss: false, auto: true, pause: 1, fontSize: 21,
+    model: 'claude-haiku-5-5', tier: 'quick',
+    updatedAt: 0, v: 3,
+  };
+  const CHOICES = {
+    hearLang: ['en-US', 'zh-CN'], replyLang: ['same', 'en', 'zh'], length: ['short', 'medium', 'long'],
+    style: ['hybrid', 'script', 'points'], pause: [1, 1.4, 2.5], model: Object.keys(MODELS), tier: ['quick', 'default'],
+  };
+
+  const RESUME_TEMPLATE = [
+    '姓名：',
+    '学校 / 专业 / 年级：',
+    '想找的工作或机会：',
+    '经历 1（做了什么、我负责什么、结果和数字）：',
+    '  技术细节（用了什么、为什么这么选）：',
+    '  最难的问题和怎么解决的：',
+    '  如果重来会怎么改：',
+    '经历 2：',
+    '和别人意见不合、出过错、压力很大的经历各一次：',
+    '技能和工具：',
+    '真实的弱点和我在怎么改：',
+    '工作身份（比如 F-1 学生，co-op 用 CPT）、能开始的时间：',
+    '最想让对方记住的一点：',
+    '不想提、要小心的话题：',
+  ].join('\n');
+
+  const EXAMPLES = {
+    'en-US': {
+      q: 'So, tell me a little about yourself.',
+      a: "Sure. I'm a second-year engineering student, and outside class most of my time goes into our robotics team, where I write the motor-control code. I like problems where hardware and software meet, so I'm looking for a co-op in embedded systems.",
+      h: "Sure. I'm a second-year engineering student who likes the place where hardware meets software.\n• Robotics team: I write the motor-control code\n• Favorite part: debugging on real hardware\n• Now looking for an embedded systems co-op",
+    },
+    'zh-CN': {
+      q: '先简单介绍一下你自己吧。',
+      a: '好的。我现在是工程专业大二的学生，课外大部分时间在机器人队写电机控制程序。我喜欢软硬件结合的问题，所以想找一个嵌入式方向的实习。',
+      h: '好的，我是工程专业大二的学生，最喜欢软硬件结合的问题。\n• 机器人队：负责电机控制程序\n• 最喜欢在真机上调试\n• 现在想找嵌入式方向的实习',
+    },
+  };
+
+  const ICONS = {
+    mic: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg>',
+    keyboard: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="6" width="19" height="12" rx="2"/><path d="M6.5 10h.01M10 10h.01M13.5 10h.01M17 10h.01M7.5 14h9"/></svg>',
+    pause: '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6.5" y="5" width="4" height="14" rx="1.2"/><rect x="13.5" y="5" width="4" height="14" rx="1.2"/></svg>',
+    check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
+    chevron: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>',
+  };
+  const AVATAR_COLORS = ['#3E7BFA', '#2BA471', '#C27C0E', '#6B57E8', '#1F8FB8', '#D9622B', '#C9497F', '#56657F'];
+
+  // ---------- small helpers ----------
+  const $ = (sel) => document.querySelector(sel);
+  const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+  const tidy = (s) => String(s || '').replace(/\s+/g, ' ').trim();
+  const isHan = (ch) => /\p{Script=Han}|[，。！？、；：]/u.test(ch || '');
+  function joinText(a, b) {
+    a = tidy(a); b = tidy(b);
+    if (!a) return b;
+    if (!b) return a;
+    return isHan(a.slice(-1)) && isHan(b[0]) ? a + b : a + ' ' + b;
+  }
+  const tail = (s, n) => (s.length > n ? '…' + s.slice(-n) : s);
+  function el(tag, cls, text) {
+    const node = document.createElement(tag);
+    if (cls) node.className = cls;
+    if (text != null) node.textContent = text;
+    return node;
+  }
+  function readJSON(key) { try { const raw = localStorage.getItem(key); return raw ? JSON.parse(raw) : null; } catch { return null; } }
+  function writeJSON(key, value) { try { localStorage.setItem(key, JSON.stringify(value)); } catch {} }
+  function readText(key) { try { return localStorage.getItem(key) || ''; } catch { return ''; } }
+  function writeText(key, value) { try { if (value) localStorage.setItem(key, value); else localStorage.removeItem(key); } catch {} }
+  const fmtClock = (ms) => { const s = Math.max(0, Math.floor(ms / 1000)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
+  const fmtDay = (ts) => { const d = new Date(ts); return (d.getMonth() + 1) + '月' + d.getDate() + '日'; };
+  function loadScript(src) {
+    return new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = src;
+      s.onload = resolve;
+      s.onerror = () => reject(new Error('could not load ' + src));
+      document.head.appendChild(s);
+    });
+  }
+
+  // ---------- settings ----------
+  function sanitizePrefs(raw) {
+    const p = Object.assign({}, DEFAULTS);
+    if (!raw || typeof raw !== 'object') return p;
+    for (const k of Object.keys(DEFAULTS)) {
+      if (!(k in raw)) continue;
+      const v = raw[k];
+      if (CHOICES[k]) { if (CHOICES[k].includes(v)) p[k] = v; }
+      else if (typeof DEFAULTS[k] === 'boolean') p[k] = !!v;
+      else if (typeof DEFAULTS[k] === 'number') { const n = Number(v); if (Number.isFinite(n)) p[k] = n; }
+      else if (typeof v === 'string') p[k] = v.slice(0, MAX_TEXT);
+    }
+    p.fontSize = Math.min(36, Math.max(16, Math.round(p.fontSize)));
+    // Earlier defaults the user moved away from: "short" read too short, and a full script is hard to say naturally.
+    const ver = Number(raw.v) || 1;
+    if (ver < 2 && raw.length === 'short') p.length = 'medium';
+    if (ver < 3 && raw.style === 'script') p.style = 'hybrid';
+    p.v = 3;
+    return p;
+  }
+  const rawPrefs = readJSON(PREFS_KEY);
+  const S = sanitizePrefs(rawPrefs);
+  let apiKey = readText(APIKEY_KEY);
+
+  // ---------- conversations ----------
+  function newConvo(fields) {
+    const now = Date.now();
+    return Object.assign({
+      id: uid(), company: '', role: '', jd: '', notes: '', resume: '', ownResume: false, createdAt: now, updatedAt: now, turns: [],
+      prep: { stories: '', qa: [], at: 0 },
+    }, fields || {});
+  }
+  function restoreTurn(t) {
+    if (!t || typeof t.q !== 'string' || !t.q) return null;
+    const kind = t.kind === 'statement' ? 'statement' : 'answer';
+    if (kind === 'answer' && (typeof t.a !== 'string' || !t.a)) return null;
+    return {
+      id: String(t.id || uid()), q: t.q, a: kind === 'answer' ? t.a : '', kind, status: 'done', err: '',
+      at: Number(t.at) || 0, heardAt: 0, source: 'saved', ttft: Number(t.ttft) || 0, model: String(t.model || ''),
+    };
+  }
+  function sanitizeConvo(raw) {
+    if (!raw || typeof raw !== 'object' || typeof raw.id !== 'string' || !/^[A-Za-z0-9_-]{1,64}$/.test(raw.id)) return null;
+    const c = newConvo({ id: raw.id });
+    for (const k of ['company', 'role', 'jd', 'notes', 'resume']) if (typeof raw[k] === 'string') c[k] = raw[k].slice(0, MAX_TEXT);
+    c.ownResume = !!raw.ownResume;
+    c.createdAt = Number(raw.createdAt) || Date.now();
+    c.updatedAt = Number(raw.updatedAt) || c.createdAt;
+    c.turns = Array.isArray(raw.turns) ? raw.turns.map(restoreTurn).filter(Boolean).slice(0, MAX_TURNS) : [];
+    const prep = raw.prep && typeof raw.prep === 'object' ? raw.prep : {};
+    c.prep = {
+      stories: typeof prep.stories === 'string' ? prep.stories.slice(0, MAX_TEXT) : '',
+      qa: (Array.isArray(prep.qa) ? prep.qa : []).filter((x) => x && typeof x.q === 'string' && typeof x.a === 'string').slice(0, 30)
+        .map((x) => ({ id: String(x.id || uid()), q: x.q.slice(0, 500), qZh: typeof x.qZh === 'string' ? x.qZh.slice(0, 200) : '', a: x.a.slice(0, 3000) })),
+      at: Number(prep.at) || 0,
+    };
+    return c;
+  }
+  const packTurn = ({ id, q, a, kind, at, ttft, model }) => ({ id, q, a, kind, at, ttft, model });
+  function packConvo(c) {
+    return {
+      id: c.id, company: c.company, role: c.role, jd: c.jd, notes: c.notes, resume: c.resume, ownResume: c.ownResume,
+      createdAt: c.createdAt, updatedAt: c.updatedAt, prep: c.prep,
+      turns: c.turns.filter((t) => t.status === 'done' && (t.kind === 'statement' || t.a)).slice(0, MAX_TURNS).map(packTurn),
+    };
+  }
+  const isBlank = (c) => !tidy(c.company + c.role + c.jd + c.notes + c.resume) && !c.turns.length && !c.prep.qa.length;
+  const convoTitle = (c) => [tidy(c.company), tidy(c.role)].filter(Boolean).join(' · ') || '新对话';
+
+  let convos = (readJSON(CONVOS_KEY) || []).map(sanitizeConvo).filter(Boolean);
+  if (!convos.length) {
+    // The first version kept one shared note and one history; fold them into the first conversation.
+    const oldTurns = readJSON(OLD_TURNS_KEY);
+    const oldNote = rawPrefs && typeof rawPrefs.context === 'string' ? rawPrefs.context : '';
+    if ((Array.isArray(oldTurns) && oldTurns.length) || tidy(oldNote)) {
+      const moved = sanitizeConvo({ id: uid(), notes: oldNote, turns: Array.isArray(oldTurns) ? oldTurns : [] });
+      if (moved) convos.push(moved);
+    }
+  }
+  try { localStorage.removeItem(OLD_TURNS_KEY); } catch {}
+  if (!convos.length) convos.push(newConvo());
+  let convo = convos.find((c) => c.id === S.activeId) || convos.slice().sort((a, b) => b.updatedAt - a.updatedAt)[0];
+  S.activeId = convo.id;
+
+  // In claude.ai the resume, settings and conversations also live in the viewer's private store.
+  const cloud = {
+    ref: null, col: null, prefsTimer: 0, prefsQueue: Promise.resolve(), timers: {}, queues: {},
+    async init() {
+      if (!IN_CLAUDE) return;
+      try {
+        const [db, user] = await Promise.all([window.claude.use('db'), window.claude.use('user')]);
+        if (!db || !user) return;
+        const id = await user.id();
+        if (!id) return;
+        this.ref = db.doc('data/users/' + id + '/prefs');
+        this.col = this.ref.collection('convos');
+        const [snap, list] = await Promise.all([this.ref.get(), this.col.get()]);
+        let changed = false;
+        const remotePrefs = snap.exists ? sanitizePrefs(snap.data()) : null;
+        if (remotePrefs && remotePrefs.updatedAt > S.updatedAt) {
+          Object.assign(S, remotePrefs);
+          writeJSON(PREFS_KEY, S);
+          applyPrefs();
+          changed = true;
+        } else if (S.updatedAt && (!remotePrefs || S.updatedAt > remotePrefs.updatedAt)) {
+          this.pushPrefs();
+        }
+        const remote = new Map();
+        for (const d of list.docs) { const c = sanitizeConvo(d.data()); if (c) remote.set(c.id, c); }
+        for (const [cid, rc] of remote) {
+          const lc = convos.find((c) => c.id === cid);
+          if (!lc) { convos.push(rc); changed = true; }
+          else if (rc.updatedAt > lc.updatedAt && !lc.turns.some((t) => t.ctl)) { Object.assign(lc, rc); changed = true; }
+        }
+        if (remote.size) {
+          const before = convos.length;
+          convos = convos.filter((c) => remote.has(c.id) || !isBlank(c));   // drop this device's empty starter
+          if (convos.length !== before) changed = true;
+        }
+        for (const c of convos) {
+          const rc = remote.get(c.id);
+          if (!rc || c.updatedAt > rc.updatedAt) this.pushConvo(c);
+        }
+        if (changed) {
+          if (!convos.includes(convo)) convo = convos.find((c) => c.id === S.activeId) || convos.slice().sort((a, b) => b.updatedAt - a.updatedAt)[0];
+          S.activeId = convo.id;
+          writeJSON(CONVOS_KEY, convos.map(packConvo));
+          renderAll(true);
+        }
+      } catch { this.ref = this.col = null; }
+    },
+    pushPrefs() {
+      if (!this.ref) return;
+      clearTimeout(this.prefsTimer);
+      this.prefsTimer = setTimeout(() => {
+        const body = Object.assign({}, S);
+        this.prefsQueue = this.prefsQueue.then(() => this.ref.set(body)).catch(() => {});
+      }, 1000);
+    },
+    pushConvo(c) {
+      if (!this.col || isBlank(c)) return;
+      clearTimeout(this.timers[c.id]);
+      this.timers[c.id] = setTimeout(() => {
+        const body = packConvo(c);
+        this.queues[c.id] = (this.queues[c.id] || Promise.resolve()).then(() => this.col.doc(c.id).set(body)).catch(() => {});
+      }, 1200);
+    },
+    dropConvo(cid) {
+      if (!this.col) return;
+      clearTimeout(this.timers[cid]);
+      this.queues[cid] = (this.queues[cid] || Promise.resolve()).then(() => this.col.doc(cid).delete()).catch(() => {});
+    },
+  };
+  function savePrefs() { S.updatedAt = Date.now(); writeJSON(PREFS_KEY, S); cloud.pushPrefs(); }
+  function saveConvos(changed) {
+    writeJSON(CONVOS_KEY, convos.map(packConvo));
+    if (changed) cloud.pushConvo(changed);
+  }
+  function touch(c) { c.updatedAt = Date.now(); saveConvos(c); }
+  function applyPrefs() {
+    document.documentElement.style.setProperty('--read-size', S.fontSize + 'px');
+    $('#langBtn').textContent = S.hearLang === 'zh-CN' ? '中' : 'EN';
+  }
+
+  function switchConvo(c) {
+    if (c === convo) return;
+    for (const t of convo.turns) if (t.ctl) stopAnswer(t, true);
+    cancelEarly();
+    convo = c;
+    S.activeId = c.id;
+    savePrefs();
+    hear.pending = '';
+    renderAll(true);
+    if (hear.on) prewarm();
+  }
+
+  // ---------- who writes the answers ----------
+  let engine = IN_CLAUDE ? { kind: 'pending' } : { kind: 'api' };
+  let firstSample = true;
+  const engineReady = (async () => {
+    if (!IN_CLAUDE) return;
+    let sample = null;
+    try { sample = await window.claude.use('sample'); } catch {}
+    engine = sample ? { kind: 'sample', sample } : { kind: 'none' };
+    renderAll();
+  })();
+
+  // The setting is a baseline: small talk stays short, and questions that need depth get a full answer.
+  const LENGTH_RULE = {
+    script: {
+      short: 'Match the length to the question. Small talk and yes/no questions: one sentence. Most questions: 2-3 short sentences (under 50 English words or 90 Chinese characters). Questions that need depth: up to 5-6 sentences.',
+      medium: 'Match the length to the question. Small talk and yes/no questions: one or two sentences. Most questions: about 5-7 sentences (roughly 90-140 English words or 170-260 Chinese characters, 30-45 seconds spoken). Questions that need depth: a full answer of about 10-14 sentences (roughly 180-260 English words or 350-480 Chinese characters, 1-1.5 minutes spoken).',
+      long: 'Match the length to the question. Small talk and yes/no questions: one or two sentences. Most questions: about 9-12 sentences (roughly 160-220 English words or 300-420 Chinese characters, about a minute spoken). Questions that need depth: a thorough answer of about 15-20 sentences (roughly 280-360 English words or 520-650 Chinese characters, about 2 minutes spoken).',
+    },
+    points: {
+      short: 'Give 2-3 cue lines, up to 4 for questions that need depth.',
+      medium: 'Give 3-4 cue lines, up to 6-7 for questions that need depth.',
+      long: 'Give 4-6 cue lines, up to 8-10 for questions that need depth.',
+    },
+    hybrid: {
+      short: 'After the opening sentence, give 2-3 cue lines, up to 4 for questions that need depth.',
+      medium: 'After the opening sentence, give 3-5 cue lines, up to 6-8 for questions that need depth.',
+      long: 'After the opening sentence, give 4-6 cue lines, up to 8-10 for questions that need depth.',
+    },
+  };
+  function styleRules() {
+    if (S.style === 'points') {
+      return ['- Write cue lines instead of a script. Start each line with "• ", keep each under 10 words, and put them in the order the user should say them. The user will speak in their own words. ' + LENGTH_RULE.points[S.length], DEPTH_RULE];
+    }
+    if (S.style === 'hybrid') {
+      return [
+        '- Start with one complete sentence the user can say right away: the direct answer. Then write cue lines for the rest, each on its own line starting with "• " and under 12 words: the key facts, names, numbers and the point to land, in the order to say them. The user speaks fluent English and will say the rest in their own words. For small talk or yes/no questions, give only the opening sentence.',
+        '- ' + LENGTH_RULE.hybrid[S.length],
+        DEPTH_RULE,
+      ];
+    }
+    return [
+      '- Make it easy to say out loud: short sentences, everyday words, natural contractions. Put the direct answer in the first sentence.',
+      '- ' + LENGTH_RULE.script[S.length],
+      DEPTH_RULE + ' Split long answers into 2-4 short paragraphs so they are easy to follow while reading aloud.',
+    ];
+  }
+  // How a strong candidate answers each kind of question; personal details that aren't written down become [填：…] notes.
+  const PLAYBOOK = [
+    '- Work out what kind of question it is and answer the way a strong candidate would:',
+    "  - Detail or follow-up questions about the user's own work (their exact role, numbers, tools, how a result was measured, the hardest part, what they would change): be specific and stay consistent with what was already said. If a detail is not in about_me, my_stories or prepared_answers, never invent it: write a short note in square brackets telling the user what to say there, such as [填：用的哪个型号], and give the rest of the answer around it.",
+    '  - Technical questions about how something works: answer from general knowledge, accurately and concretely, the way the user would explain it.',
+    '  - Behavioral ("tell me about a time"): situation, task, what the user did, result. Show ownership.',
+    '  - Situational ("what would you do if"): show judgment: understand the situation first, talk to the people involved one-on-one, consider their side, keep the shared goal in mind, and escalate only when needed. Tie it to a real example if there is one.',
+    '  - Emotional intelligence (conflict, criticism, failure, pressure, a difficult teammate): acknowledge feelings, own your part, never blame others, and end with what was learned.',
+    '  - Weakness: a real but manageable weakness, what the user is doing about it, and the progress so far.',
+    "  - Pushback or a challenge (\"that doesn't sound impressive\", \"are you sure?\"): stay calm and gracious, don't get defensive, acknowledge the point, then add one concrete fact or ask a short clarifying question.",
+    '  - Estimation or brain teasers: think out loud: state assumptions, break the problem into steps, and give a rough answer.',
+    '  - Odd or creative questions: answer briefly with a light touch and tie back to a real trait.',
+    '  - Small talk: warm and brief; ask something back when it is natural.',
+    '  - "Do you have any questions for us?": ask two thoughtful questions about the team, the work or how success is measured, based on the_job and the notes.',
+    '  - Salary, other offers, start date or work authorization: honest, polite and flexible. Use only what about_me says; otherwise use a [填：…] note.',
+  ].join('\n');
+  const DEPTH_RULE = '- Questions that need depth include: walking through the user\'s background, resume or a project; "tell me about a time" questions (cover the situation, the task, what the user did step by step, and the result, with numbers if about_me has them); explaining how something works or how the user would design, debug or approach a technical problem; and several questions asked at once. Answer these fully: the direct answer first, then the details in a clear order, then a one-line wrap-up.';
+  const LANG_RULE = {
+    same: 'Reply in the language the other person is using. If they mix languages, use their main one.',
+    en: 'Always reply in English.',
+    zh: 'Always reply in Simplified Chinese.',
+  };
+
+  const resumeOf = (c) => (c.ownResume ? c.resume : S.profile).trim();
+  function buildRules(c, heardByMic) {
+    const resume = resumeOf(c);
+    const lines = [
+      'You are a live answer prompter. The user is in a spoken conversation, usually a job interview or a networking chat. Their phone transcribes what the other person says, and the user reads your reply aloud as their own words.',
+      '',
+      '<about_me>',
+      resume || "(The user hasn't given a resume yet. Give honest, general answers. Never invent personal details; where one is needed, write a short placeholder in square brackets, such as [my school].)",
+      '</about_me>',
+    ];
+    const job = [];
+    if (tidy(c.company)) job.push('Company: ' + c.company.trim());
+    if (tidy(c.role)) job.push('Role: ' + c.role.trim());
+    if (tidy(c.jd)) job.push('Job description:', c.jd.trim());
+    if (job.length) lines.push('', '<the_job>', ...job, '</the_job>');
+    if (tidy(c.notes)) lines.push('', '<notes_for_this_conversation>', c.notes.trim(), '</notes_for_this_conversation>');
+    if (tidy(c.prep.stories)) lines.push('', '<my_stories>', c.prep.stories.trim(), '</my_stories>');
+    const prepared = c.prep.qa.filter((p) => tidy(p.q) && tidy(p.a));
+    if (prepared.length) {
+      lines.push('', '<prepared_answers>', 'The user prepared and reviewed these answers for this interview. If a question matches or is close to one of them, reuse that answer (same opening sentence and points) and change only what the actual question needs.');
+      for (const p of prepared) lines.push('', 'Q: ' + p.q.trim(), 'A: ' + p.a.trim());
+      lines.push('</prepared_answers>');
+    }
+    lines.push('', 'How to reply:', '- Write only what the user will say, in the first person, as the user. No preamble, labels, quotation marks, markdown, emoji or stage directions.');
+    lines.push(...styleRules());
+    lines.push(
+      '- ' + LANG_RULE[S.replyLang],
+      '- Use only facts about the user from about_me, my_stories, prepared_answers and earlier in this conversation. Never invent employers, schools, numbers, dates, projects or skills. When a personal detail is missing, use a [填：…] note or bridge to a related real experience.',
+      PLAYBOOK,
+    );
+    if (job.length) {
+      lines.push('- Where it fits naturally, connect the user\'s experience to this role and company. Don\'t force it. Only mention specifics about the company that appear in the_job or the notes, or that are widely known.');
+    }
+    lines.push(
+      "- Sound like a thoughtful, confident person: specific, honest and warm. Don't oversell.",
+      '- The text comes from speech recognition, so it may have wrong words, no punctuation, or be cut off. Answer what they most likely asked. If it is too garbled to understand, politely ask them to repeat, in their language.',
+      '- If they asked several questions at once, answer each one briefly, in order, in one reply.',
+      '- Stay consistent with what the user already said earlier in this conversation.',
+    );
+    if (heardByMic) {
+      lines.push(
+        '- First decide whether the user should speak now:',
+        "  - If the new text is clearly the user's own voice reading back or paraphrasing their previous reply, output exactly [ME] and nothing else.",
+        '  - If the other person has not asked anything or invited a reply yet (for example, they are still explaining the role, the company or the next step), output exactly [WAIT] and nothing else.',
+        '  - Questions, requests such as "tell me about…" or "walk me through…", and greetings or thanks that expect a reply all need a reply. For small talk, keep the reply short and natural.',
+      );
+    } else {
+      lines.push('- If they did not ask a question (small talk, a comment, thanks), give a short natural reply that keeps the conversation going.');
+    }
+    lines.push('- After the reply, add a line containing only 【问题】, then what they asked, rewritten in Simplified Chinese as one short, clear question. If they asked several, number them (1. 2.).');
+    if (S.gloss && S.replyLang !== 'zh') {
+      lines.push('- Then add a line containing only 【中文】, then one line in Simplified Chinese with the gist of your reply. Skip this part if your reply is in Chinese.');
+    }
+    return lines.join('\n');
+  }
+
+  const said = (q) => 'They said: "' + q + '"';
+  function buildMessagesFor(q, history, at) {
+    const past = history.filter((t) => t.status === 'done' && at - t.at < HISTORY_MS).slice(0, HISTORY_TURNS).reverse();
+    const msgs = [];
+    for (const t of past) {
+      msgs.push({ role: 'user', content: said(t.q) });
+      if (t.kind !== 'statement' && t.a) msgs.push({ role: 'assistant', content: t.a });
+    }
+    msgs.push({ role: 'user', content: said(q) });
+    return msgs;
+  }
+  const buildMessages = (turn, c) => buildMessagesFor(turn.q, c.turns.slice(c.turns.indexOf(turn) + 1), turn.at);
+
+  async function askSample(rules, messages, signal, onText) {
+    const res = await engine.sample([{ role: 'user', content: rules }, ...messages], {
+      signal, cache: false, modelTier: S.tier, onText: ({ text }) => onText(text),
+    });
+    return { text: res.text, model: res.modelTierApplied === 'quick' ? 'Claude · 快' : 'Claude' };
+  }
+
+  let sdk = null;
+  let client = null;
+  let clientKey = '';
+  let noFallbacks = false;
+  async function getClient() {
+    if (!apiKey) throw { code: 'no_key' };
+    if (!sdk) {
+      try { const mod = await import(SDK_URL); sdk = mod.default || mod.Anthropic; }
+      catch { throw { code: 'sdk_load' }; }
+    }
+    if (!client || clientKey !== apiKey) {
+      client = new sdk({ apiKey, dangerouslyAllowBrowser: true, maxRetries: 1 });
+      clientKey = apiKey;
+    }
+    return client;
+  }
+  async function askApi(rules, messages, signal, onText) {
+    const c = await getClient();
+    const m = MODELS[S.model];
+    // The rules (resume, job, prep) are a stable prefix: cache them, and the growing conversation after them.
+    const body = Object.assign({
+      model: S.model, max_tokens: 8000, messages, cache_control: { type: 'ephemeral' },
+      system: [{ type: 'text', text: rules, cache_control: { type: 'ephemeral' } }],
+    }, m.params);
+    // On a policy decline the API reruns the request on a fallback model inside the same stream.
+    if (m.fallback && !noFallbacks) { body.betas = ['server-side-fallback-2026-07-01']; body.fallbacks = 'default'; }
+    let text = '';
+    try {
+      const stream = c.beta.messages.stream(body, { signal });
+      stream.on('text', (delta) => { text += delta; onText(text); });
+      const msg = await stream.finalMessage();
+      if (msg.stop_reason === 'refusal') throw { code: 'refused' };
+    } catch (e) {
+      if (body.fallbacks && !text && e instanceof sdk.BadRequestError && /fallback/i.test(apiMessage(e))) {
+        noFallbacks = true;   // this account can't use server-side fallbacks; ask again without them
+        return askApi(rules, messages, signal, onText);
+      }
+      throw e;
+    }
+    return { text, model: m.label };
+  }
+
+  // Write the rules into the prompt cache when listening starts, so the first question doesn't pay for it.
+  let warmedFor = '';
+  async function prewarm() {
+    if (engine.kind !== 'api' || !apiKey) return;
+    const rules = buildRules(convo, true);
+    const key = S.model + '\n' + rules;
+    if (key === warmedFor) return;
+    warmedFor = key;
+    try {
+      const c = await getClient();
+      await c.messages.create(Object.assign({
+        model: S.model, max_tokens: 0,
+        system: [{ type: 'text', text: rules, cache_control: { type: 'ephemeral' } }],
+        messages: [{ role: 'user', content: 'warmup' }],
+      }, MODELS[S.model].params));
+    } catch { warmedFor = ''; }
+  }
+
+  function describeError(e) {
+    const A = sdk;
+    if (A) {
+      if (e instanceof A.AuthenticationError) return 'API Key 不对或已失效。到「设置」里检查一下。';
+      if (e instanceof A.PermissionDeniedError) return '这个 API Key 没有权限用这个模型。';
+      if (e instanceof A.RateLimitError) return '请求太频繁或额度用完了。等几秒再点「重答」。';
+      if (e instanceof A.BadRequestError) return '请求被拒绝：' + apiMessage(e);
+      if (e instanceof A.APIConnectionError) return '连不上 Anthropic。检查网络后点「重答」。';
+      if (e instanceof A.InternalServerError) return 'Anthropic 服务器暂时繁忙。点「重答」再试。';
+      if (e instanceof A.APIError) return '出错了（' + (e.status || '?') + '）：' + apiMessage(e);
+    }
+    switch (e && e.code) {
+      case 'no_key': return '还没填 API Key。点右上角「设置」，填好后点「重答」。';
+      case 'sdk_load': return '加载不了 Anthropic 的组件。检查网络后点「重答」。';
+      case 'no_engine': return '要在 claude.ai 里打开这个页面，才能用你的 Claude 账号写回答。';
+      case 'refused': return 'Claude 没有回答这个问题。换个说法再问，或者自己回答。';
+      case 'not_granted': return '你没有允许这个页面使用 Claude。刷新页面，在弹窗里选择允许。';
+      case 'sampling_disabled': return '你的账号不能在网页里调用 Claude。';
+      case 'rate_limited': return '用得太频繁，或到了账号的用量上限。稍后再试。';
+      case 'session_expired': return '登录过期了。重新登录 claude.ai 后再试。';
+      case 'empty_completion': return '这次没写出内容。点「重答」再试。';
+      case 'prompt_too_large': return '简历或职位描述太长了，删掉一些再试。';
+      case 'invalid_json': return '生成的内容格式不对，再点一次试试。';
+      default: return '连接中断了。点「重答」再试。';
+    }
+  }
+  function apiMessage(e) {
+    const msg = (e && e.error && e.error.error && e.error.error.message) || (e && e.message) || '';
+    return msg.slice(0, 180);
+  }
+  const isAbort = (e, signal) => signal.aborted || (e && (e.code === 'cancelled' || e.name === 'AbortError' || (sdk && e instanceof sdk.APIUserAbortError)));
+
+  // The model answers [ME] for the user's own voice and [WAIT] when nothing has been asked yet.
+  const MARKERS = ['[ME]', '[WAIT]'];
+  const markerOf = (text) => { const head = text.trimStart(); return MARKERS.find((m) => head.startsWith(m)) || null; };
+  const mayBeMarker = (text) => { const head = text.trimStart(); return head.length < 6 && MARKERS.some((m) => m.startsWith(head)); };
+
+  // pre: an answer already started in the background for exactly this question (see startEarly).
+  async function answer(turn, pre) {
+    const c = convo;
+    if (turn.ctl) turn.ctl.abort();
+    const ctl = pre ? pre.ctl : new AbortController();
+    turn.ctl = ctl;
+    Object.assign(turn, { a: '', kind: 'answer', status: 'thinking', err: '', ttft: 0, model: '' });
+    const t0 = pre ? pre.t0 : performance.now();
+    const heardByMic = turn.source === 'voice' || turn.source === 'dictation';
+    paintTurn(turn);
+    updateStatus();
+    if (engine.kind === 'pending') await engineReady;
+    const onText = (text) => {
+      if (ctl.signal.aborted || mayBeMarker(text) || markerOf(text)) return;
+      if (!turn.ttft) turn.ttft = performance.now() - t0;
+      turn.a = text;
+      turn.status = 'streaming';
+      paintTurn(turn);
+    };
+    try {
+      let res;
+      if (pre) {
+        pre.onText = onText;
+        if (pre.acc) onText(pre.acc);
+        res = await pre.promise;
+      } else {
+        if (engine.kind !== 'sample' && engine.kind !== 'api') throw { code: 'no_engine' };
+        const ask = engine.kind === 'sample' ? askSample : askApi;
+        res = await ask(buildRules(c, heardByMic), buildMessages(turn, c), ctl.signal, onText);
+      }
+      if (ctl.signal.aborted) return;
+      const marker = heardByMic ? markerOf(res.text) : null;
+      if (marker === '[ME]') {
+        dropTurn(turn, c);
+        note('听起来是你在说话，已跳过');
+        return;
+      }
+      if (marker === '[WAIT]') {
+        Object.assign(turn, { kind: 'statement', a: '', status: 'done', ttft: 0 });
+        return;
+      }
+      turn.a = res.text.trim();
+      turn.model = res.model;
+      turn.status = 'done';
+    } catch (e) {
+      if (isAbort(e, ctl.signal)) return;
+      turn.status = 'error';
+      turn.err = describeError(e);
+      if (e && e.code === 'refused') turn.a = '';
+      else if (e && typeof e.text === 'string' && !markerOf(e.text)) turn.a = e.text;
+    } finally {
+      if (turn.ctl === ctl) {
+        turn.ctl = null;
+        if (engine.kind === 'sample') firstSample = false;
+        paintTurn(turn);
+        touch(c);
+        updateStatus();
+      }
+    }
+  }
+  function stopAnswer(turn, quiet) {
+    if (!turn.ctl) return;
+    turn.ctl.abort();
+    turn.ctl = null;
+    turn.status = turn.a ? 'done' : 'error';
+    if (!turn.a) turn.err = '已停止。';
+    if (!quiet) { paintTurn(turn); saveConvos(convo); updateStatus(); }
+  }
+  function dropTurn(turn, c) {
+    if (turn.ctl) turn.ctl.abort();
+    turn.ctl = null;
+    c.turns = c.turns.filter((t) => t !== turn);
+    touch(c);
+    if (c === convo) renderAll();
+  }
+
+  // ---------- deciding what to answer ----------
+  const ACKS = new Set(['ok', 'okay', 'yeah', 'yes', 'yep', 'yup', 'uh', 'um', 'uh huh', 'mm', 'mhm', 'hmm', 'right', 'sure', 'cool', 'great', 'nice', 'got it', 'i see',
+    '嗯', '嗯嗯', '好', '好的', '对', '对对', '是', '是的', '行', '哦', '啊']);
+  const isAck = (text) => ACKS.has(text.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, '').replace(/\s+/g, ' ').trim());
+
+  // How long a pause means they're done: shorter after a question mark (iOS dictation adds them),
+  // longer when the words so far stop mid-phrase ("and", "about", "因为").
+  const DANGLING = /\b(and|or|but|so|because|the|a|an|to|of|for|with|about|in|on|at|your|my|our|that|which|if|like|um|uh)[\s,]*$|(和|跟|还有|然后|就是|因为|所以|如果|的|在|对|把|还是|或者|呃|嗯)[\s，,]*$/i;
+  function settleMs(text, base) {
+    const t = tidy(text);
+    if (/[?？]$/.test(t)) return Math.min(base, 350);
+    if (DANGLING.test(t)) return base * 2;
+    return base;
+  }
+
+  const tokens = (s) => s.toLowerCase().match(/\p{Script=Han}|[\p{L}\p{N}']+/gu) || [];
+
+  // A question close enough to a prepared one gets the user's own reviewed answer at once, with no model call.
+  const STOP = new Set(['the', 'and', 'you', 'your', 'are', 'was', 'were', 'does', 'did', 'can', 'could', 'would', 'will', 'about', 'tell',
+    'what', 'how', 'why', 'for', 'with', 'that', 'this', 'have', 'has', 'had', 'any', 'some', 'give', 'please', 'little', 'bit', 'like', 'maybe']);
+  function termSet(s) {
+    const t = tokens(s);
+    const set = new Set();
+    for (let i = 0; i < t.length; i++) {
+      if (/^\p{Script=Han}$/u.test(t[i])) {
+        if (/^\p{Script=Han}$/u.test(t[i + 1] || '')) set.add(t[i] + t[i + 1]);
+      } else if (t[i].length > 2 && !STOP.has(t[i])) {
+        set.add(t[i].replace(/(ing|ed|es|s)$/, ''));
+      }
+    }
+    return set;
+  }
+  function matchPrepared(c, text) {
+    const said = termSet(text);
+    if (!said.size) return null;
+    let best = null;
+    let score = 0;
+    for (const p of c.prep.qa) {
+      if (!tidy(p.q) || !tidy(p.a)) continue;
+      const known = termSet(p.q);
+      let hit = 0;
+      for (const w of said) if (known.has(w)) hit++;
+      const s = hit / (said.size + known.size - hit);
+      if (s > score) { score = s; best = p; }
+    }
+    return score >= 0.6 ? best : null;
+  }
+  const bigrams = (t) => { const out = []; for (let i = 0; i + 1 < t.length; i++) out.push(t[i] + ' ' + t[i + 1]); return out; };
+  // The phone also hears the user reading the reply aloud; skip text that mostly repeats a recent reply.
+  function isOwnVoice(text) {
+    const spoken = bigrams(tokens(text));
+    if (spoken.length < 2) return false;
+    return convo.turns.slice(0, 4).some((t) => {
+      if (!t.a) return false;
+      const known = new Set(bigrams(tokens(splitAnswer(t.a).main)));
+      let hit = 0;
+      for (const b of spoken) if (known.has(b)) hit++;
+      return hit / spoken.length >= 0.45;
+    });
+  }
+
+  function heard(raw, { source, startedAt = 0 }) {
+    const text = tidy(raw);
+    const pre = source === 'voice' ? takeEarly(text) : (cancelEarly(), null);
+    if (!text) return;
+    const turns = convo.turns;
+    if (source === 'voice' || source === 'dictation') {
+      if (isOwnVoice(text)) { if (pre) pre.ctl.abort(); return note('听起来是你在念回答，已跳过'); }
+      if (!S.auto || isAck(text)) {
+        if (pre) pre.ctl.abort();
+        hear.pending = joinText(hear.pending, text);
+        paintCaption();
+        if (S.auto) note('只是附和，没有回答。需要的话点右下角');
+        return;
+      }
+      const last = turns[0];
+      if (last && last.source === source && startedAt && last.heardAt && startedAt - last.heardAt < MERGE_GAP_MS) {
+        if (pre) pre.ctl.abort();
+        last.q = joinText(last.q, text);
+        last.heardAt = Date.now();
+        hear.pending = '';
+        answer(last);
+        renderAll(true);
+        return;
+      }
+    }
+    hear.pending = '';
+    const turn = { id: uid(), q: text, a: '', kind: 'answer', status: 'thinking', err: '', at: Date.now(), heardAt: Date.now(), source, ttft: 0, model: '' };
+    turns.unshift(turn);
+    for (const old of turns.splice(MAX_TURNS)) if (old.ctl) old.ctl.abort();
+    const prepared = matchPrepared(convo, text);
+    if (prepared) {
+      if (pre) pre.ctl.abort();
+      Object.assign(turn, {
+        a: prepared.a.trim() + (tidy(prepared.qZh) ? '\n【问题】\n' + prepared.qZh.trim() : ''),
+        status: 'done', model: '准备过的回答',
+      });
+      touch(convo);
+    } else {
+      answer(turn, pre);
+    }
+    renderAll(true);
+  }
+
+  // ---------- answering early (API only) ----------
+  // A short pause starts the answer in the background; if the full pause confirms they finished, it is
+  // already streaming. If they keep talking, it is dropped.
+  const EARLY_MS = 450;
+  let early = null;
+  function cancelEarly() {
+    if (early) { early.ctl.abort(); early = null; }
+  }
+  function startEarly(text, startedAt) {
+    if (engine.kind !== 'api' || !apiKey || !S.auto || mode !== 'voice') return;
+    if (early && early.text === text) return;
+    cancelEarly();
+    if (!text || isOwnVoice(text) || isAck(text) || matchPrepared(convo, text)) return;
+    const last = convo.turns[0];
+    if (last && last.source === 'voice' && startedAt && last.heardAt && startedAt - last.heardAt < MERGE_GAP_MS) return;   // will merge instead
+    const ctl = new AbortController();
+    const e = { text, ctl, acc: '', onText: null, t0: performance.now() };
+    e.promise = askApi(buildRules(convo, true), buildMessagesFor(text, convo.turns, Date.now()), ctl.signal, (t) => {
+      e.acc = t;
+      if (e.onText) e.onText(t);
+    });
+    e.promise.catch(() => {});   // handled by whoever adopts it
+    early = e;
+  }
+  function takeEarly(text) {
+    const e = early;
+    early = null;
+    if (e && e.text === text && !e.ctl.signal.aborted) return e;
+    if (e) e.ctl.abort();
+    return null;
+  }
+
+  // ---------- listening with the browser's speech recognition ----------
+  const getSR = () => window.SpeechRecognition || window.webkitSpeechRecognition || null;
+  const hear = {
+    on: false, rec: null, running: false, flushing: false, warmed: false,
+    carry: '', live: '', pending: '', startedAt: 0, since: 0, fails: 0, silence: 0, restart: 0, clock: 0,
+    recStartedAt: 0, gotResult: false, earlyTimer: 0,
+  };
+  const heardSoFar = () => joinText(hear.carry, hear.live);
+  const MIC_HELP = IS_ANDROID
+    ? '麦克风被拒绝了。点地址栏左边的图标，把麦克风改成允许，再点「开始听」。'
+    : '麦克风或语音识别被拒绝了。在 iPhone「设置」里找到 Safari，把麦克风改成允许，并在「通用 → 键盘」打开「启用听写」，然后刷新页面。';
+
+  function resultsText(results) {
+    const parts = [];
+    for (let i = 0; i < results.length; i++) {
+      const t = tidy(results[i][0] ? results[i][0].transcript : '');
+      if (!t) continue;
+      const last = parts[parts.length - 1];
+      if (last && t.startsWith(last)) parts[parts.length - 1] = t;   // some builds repeat the whole phrase so far
+      else if (!(last && last.startsWith(t))) parts.push(t);
+    }
+    return parts.reduce(joinText, '');
+  }
+
+  // One recognizer per page, restarted after every phrase: phones stall or repeat text in continuous
+  // mode, and iOS plays its start chime whenever a new recognizer is created.
+  function makeRec() {
+    const rec = new (getSR())();
+    rec.continuous = !IS_MOBILE;
+    rec.interimResults = true;
+    rec.maxAlternatives = 1;
+    rec.onresult = (ev) => {
+      if (hear.flushing || !hear.on) return;
+      const text = resultsText(ev.results);
+      if (!text) return;
+      if (!hear.carry && !hear.live) hear.startedAt = Date.now();
+      hear.live = text;
+      hear.gotResult = true;
+      hear.fails = 0;
+      paintCaption();
+      clearTimeout(hear.silence);
+      clearTimeout(hear.earlyTimer);
+      const sofar = heardSoFar();
+      if (early && early.text !== sofar) cancelEarly();   // they kept talking
+      const settle = settleMs(sofar, S.pause * 1000);
+      hear.silence = setTimeout(endUtterance, settle);
+      if (settle > EARLY_MS + 250) hear.earlyTimer = setTimeout(() => startEarly(heardSoFar(), hear.startedAt), EARLY_MS);
+    };
+    rec.onerror = (ev) => {
+      if (!hear.on) return;
+      const code = ev.error;
+      if (code === 'no-speech' || code === 'aborted') return;
+      if (code === 'not-allowed' || code === 'service-not-allowed') return giveUp(MIC_HELP);
+      if (code === 'audio-capture') return giveUp('找不到能用的麦克风。');
+      if (code === 'language-not-supported') return giveUp('这台设备不支持用这种语言识别，换一种试试。');
+      hear.fails++;
+      if (code === 'network') note('语音识别需要联网，正在重试…');
+    };
+    rec.onend = () => {
+      hear.running = false;
+      if (hear.flushing) hear.flushing = false;
+      else {
+        if (!hear.gotResult && Date.now() - hear.recStartedAt < 1000) hear.fails++;
+        hear.carry = heardSoFar();   // keep what was heard; the silence timer decides when they finished
+        hear.live = '';
+      }
+      scheduleRestart();
+    };
+    return rec;
+  }
+  function startRec() {
+    if (!hear.on || document.hidden || hear.running) return;
+    try {
+      if (!hear.rec) hear.rec = makeRec();
+      hear.rec.lang = S.hearLang;
+      hear.flushing = false;
+      hear.gotResult = false;
+      hear.recStartedAt = Date.now();
+      hear.rec.start();
+      hear.running = true;
+    } catch {
+      hear.fails++;
+      scheduleRestart();
+    }
+  }
+  function flushRec() {   // end the current session; onend starts the next one
+    if (!hear.running || !hear.rec) return;
+    hear.flushing = true;
+    try { hear.rec.abort(); }
+    catch { hear.running = false; hear.flushing = false; scheduleRestart(); }
+  }
+  function scheduleRestart() {
+    clearTimeout(hear.restart);
+    if (!hear.on || document.hidden) return;
+    if (hear.fails >= 6) return giveUp('语音识别一直失败，已暂停。检查网络后再点「开始听」。');
+    const wait = hear.fails ? Math.min(3000, 300 * 2 ** hear.fails) : 200;
+    hear.restart = setTimeout(startRec, wait);
+  }
+  async function startListening() {
+    if (!getSR()) {
+      setMode('type');
+      note('这个浏览器不能语音识别：iPhone 请用 Safari，安卓请用 Chrome', 8000);
+      return;
+    }
+    Object.assign(hear, { on: true, carry: '', live: '', pending: '', startedAt: 0, fails: 0, since: Date.now() });
+    renderDock();
+    paintCaption();
+    updateStatus();
+    if (IS_IOS && !hear.warmed && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+      hear.warmed = true;   // asking for the mic first makes the first recognition on iPhone far more reliable
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        stream.getTracks().forEach((t) => t.stop());
+      } catch { giveUp(MIC_HELP); return; }
+      if (!hear.on) return;
+    }
+    startRec();
+    keepAwake(true);
+    prewarm();
+    clearInterval(hear.clock);
+    hear.clock = setInterval(updateStatus, 1000);
+  }
+  function stopListening() {
+    hear.on = false;
+    clearTimeout(hear.silence);
+    clearTimeout(hear.restart);
+    clearTimeout(hear.earlyTimer);
+    cancelEarly();
+    clearInterval(hear.clock);
+    hear.carry = heardSoFar();
+    hear.live = '';
+    flushRec();
+    keepAwake(false);
+    renderDock();
+    paintCaption();
+    updateStatus();
+  }
+  function giveUp(message) {
+    stopListening();
+    note(message, 12000);
+  }
+  function takeHeard() {
+    clearTimeout(hear.silence);
+    const text = heardSoFar();
+    const startedAt = hear.startedAt;
+    hear.carry = hear.live = '';
+    hear.startedAt = 0;
+    flushRec();   // a fresh session, so the next question doesn't repeat this one
+    return { text, startedAt };
+  }
+  function endUtterance() {
+    const { text, startedAt } = takeHeard();
+    paintCaption();
+    if (text) heard(text, { source: 'voice', startedAt });
+  }
+  function answerNow() {
+    if (mode === 'type') { sendTyped(true); return; }
+    const pending = hear.pending;
+    const { text } = takeHeard();
+    hear.pending = '';
+    paintCaption();
+    const all = joinText(pending, text);
+    if (!all) { note('还没听到新的话'); return; }
+    heard(all, { source: 'manual' });
+  }
+
+  let wakeLock = null;
+  async function keepAwake(on) {
+    try {
+      if (on && !wakeLock && 'wakeLock' in navigator) {
+        wakeLock = await navigator.wakeLock.request('screen');
+        wakeLock.addEventListener('release', () => { wakeLock = null; });
+      } else if (!on && wakeLock) {
+        const lock = wakeLock;
+        wakeLock = null;
+        await lock.release();
+      }
+    } catch { wakeLock = null; }
+  }
+  document.addEventListener('visibilitychange', () => {
+    if (!hear.on) return;
+    if (document.hidden) { flushRec(); return; }   // recognition dies in the background anyway
+    keepAwake(true);
+    clearTimeout(hear.restart);
+    startRec();
+  });
+
+  // ---------- typing / keyboard dictation ----------
+  const sayEl = $('#say');
+  const typed = { consumed: 0, lastLen: 0, timer: 0, composing: false, dictated: false, startedAt: 0 };
+  function fitSay() {
+    sayEl.style.height = '44px';
+    sayEl.style.height = Math.min(96, sayEl.scrollHeight) + 'px';
+    sayEl.scrollTop = sayEl.scrollHeight;   // keep the newest dictated words in view
+    $('#clearBtn').hidden = mode !== 'type' || !sayEl.value;
+  }
+  sayEl.addEventListener('compositionstart', () => { typed.composing = true; });
+  sayEl.addEventListener('compositionend', () => { typed.composing = false; armTyped(); });
+  sayEl.addEventListener('input', () => {
+    const len = sayEl.value.length;
+    if (len < typed.consumed) typed.consumed = 0;
+    if (len - typed.lastLen >= 3) typed.dictated = true;   // dictation and paste add words at a time; typing adds letters
+    typed.lastLen = len;
+    if (!typed.startedAt) typed.startedAt = Date.now();
+    fitSay();
+    armTyped();
+  });
+  sayEl.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && e.keyCode !== 229) { e.preventDefault(); sendTyped(true); }
+  });
+  function armTyped() {
+    clearTimeout(typed.timer);
+    if (!S.auto || typed.composing || !typed.dictated) return;
+    const base = Math.max(1200, S.pause * 1000 + 300);   // a split question is merged back
+    typed.timer = setTimeout(() => sendTyped(false), settleMs(sayEl.value.slice(typed.consumed), base));
+  }
+  function sendTyped(manual) {
+    clearTimeout(typed.timer);
+    const text = tidy(sayEl.value.slice(typed.consumed));
+    const startedAt = typed.startedAt;
+    typed.startedAt = 0;
+    typed.dictated = false;
+    if (manual || document.activeElement !== sayEl) sayEl.value = '';   // clearing mid-dictation can stop the keyboard's dictation
+    typed.consumed = typed.lastLen = sayEl.value.length;
+    fitSay();
+    if (!text) { if (manual) note('先听写或打几个字'); return; }
+    heard(text, { source: manual ? 'manual' : 'dictation', startedAt });
+  }
+
+  let mode = IN_CLAUDE || !getSR() ? 'type' : 'voice';
+  function setMode(next, focus) {
+    if (next === mode) return;
+    if (next === 'type' && hear.on) stopListening();
+    mode = next;
+    renderDock();
+    updateStatus();
+    paintCaption();
+    if (!convo.turns.length) renderAll();
+    if (next === 'type' && focus) sayEl.focus();
+  }
+
+  // ---------- reading resume files ----------
+  async function pdfText(file) {
+    if (!window.pdfjsLib) {
+      await loadScript(PDFJS_URL);
+      await loadScript(PDFJS_WORKER_URL);   // registers pdfjsWorker, so parsing runs on this page without a worker file
+    }
+    const pdf = await window.pdfjsLib.getDocument({
+      data: new Uint8Array(await file.arrayBuffer()), isEvalSupported: false,
+      cMapUrl: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/cmaps/', cMapPacked: true,
+    }).promise;
+    const pages = [];
+    for (let i = 1; i <= Math.min(pdf.numPages, 12); i++) {
+      const content = await (await pdf.getPage(i)).getTextContent();
+      pages.push(content.items.map((it) => (it.str || '') + (it.hasEOL ? '\n' : '')).join(''));
+    }
+    return pages.join('\n\n');
+  }
+  async function docxText(file) {
+    if (!window.mammoth) await loadScript(MAMMOTH_URL);
+    const res = await window.mammoth.extractRawText({ arrayBuffer: await file.arrayBuffer() });
+    return res.value || '';
+  }
+  async function readResumeFile(file) {
+    const name = (file.name || '').toLowerCase();
+    if (name.endsWith('.pdf') || file.type === 'application/pdf') return pdfText(file);
+    if (name.endsWith('.docx')) return docxText(file);
+    return file.text();
+  }
+  let importTarget = null;
+  function pickResumeFile(textarea, status, apply) {
+    importTarget = { textarea, status, apply };
+    const input = $('#fileInput');
+    input.value = '';
+    input.click();
+  }
+  $('#fileInput').addEventListener('change', async (e) => {
+    const file = e.target.files && e.target.files[0];
+    const target = importTarget;
+    if (!file || !target) return;
+    target.status.textContent = '正在读取 ' + file.name + '…';
+    try {
+      const text = (await readResumeFile(file)).replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+      if (tidy(text).length < 20) throw new Error('no text');
+      target.textarea.value = text.slice(0, MAX_TEXT);
+      target.apply(target.textarea.value);
+      target.status.textContent = '已读取 ' + file.name + '（' + tidy(text).length.toLocaleString() + ' 字），可以再改一改。';
+    } catch {
+      target.status.textContent = '没能从 ' + file.name + ' 读出文字（扫描件或图片 PDF 读不了）。请直接复制粘贴简历内容。';
+    }
+  });
+
+  // ---------- rendering ----------
+  // A reply is: the words to say, then 【问题】 the question it answered, then optionally 【中文】 its gist.
+  function splitAnswer(text) {
+    const qi = text.indexOf('【问题】');
+    const gi = text.indexOf('【中文】');
+    const cut = Math.min(qi >= 0 ? qi : text.length, gi >= 0 ? gi : text.length);
+    let main = text.slice(0, cut);
+    const half = main.match(/【[问题中文]{0,2}$/);   // marker still being written
+    if (half) main = main.slice(0, half.index);
+    const question = qi >= 0 ? text.slice(qi + 4, gi > qi ? gi : undefined).trim() : '';
+    const gloss = gi >= 0 ? text.slice(gi + 4, qi > gi ? qi : undefined).trim() : '';
+    return { main: main.trim(), question, gloss };
+  }
+  function speakSeconds(text) {
+    const words = (text.match(/[A-Za-z0-9'’-]+/g) || []).length;
+    const han = (text.match(/\p{Script=Han}/gu) || []).length;
+    return Math.max(2, Math.round(words / 2.4 + han / 4.2));
+  }
+  function actButton(label, act) {
+    const b = el('button', null, label);
+    b.type = 'button';
+    b.dataset.act = act;
+    return b;
+  }
+
+  const chatEl = $('#chat');
+  const nearBottom = () => chatEl.scrollHeight - chatEl.scrollTop - chatEl.clientHeight < 160;
+  const toBottom = () => { chatEl.scrollTop = chatEl.scrollHeight; };
+  // Keep the newest exchange in view from its first line: a long answer stays anchored at its start
+  // instead of scrolling away while it is still being written.
+  function anchorNewest() {
+    const all = $('#chatInner').querySelectorAll('.turn[data-id]');
+    const last = all[all.length - 1];
+    const bottom = chatEl.scrollHeight - chatEl.clientHeight;
+    if (!last) { chatEl.scrollTop = bottom; return; }
+    const top = chatEl.scrollTop + last.getBoundingClientRect().top - chatEl.getBoundingClientRect().top - 8;
+    chatEl.scrollTop = Math.max(0, Math.min(bottom, top));
+  }
+
+  function noticeNode() {
+    let msg = '';
+    let action = null;
+    if (engine.kind === 'none') msg = '要在 claude.ai 里打开，才能用你的 Claude 账号写回答';
+    else if (engine.kind === 'api' && !apiKey) { msg = '还没填 API Key'; action = ['去设置', 'settings']; }
+    else if (!resumeOf(convo)) { msg = '还没有简历，回答会比较笼统'; action = ['去填写', convo.ownResume ? 'convo' : 'settings']; }
+    if (!msg) return null;
+    const tip = el('div', 'tip', msg);
+    if (action) tip.append(actButton(action[0], action[1]));
+    return tip;
+  }
+
+  function setupRow(done, title, detail, act) {
+    const row = el('button', 'setup-row');
+    row.type = 'button';
+    row.dataset.act = act;
+    const check = el('span', 'check' + (done ? ' is-done' : ''));
+    if (done) check.innerHTML = ICONS.check;
+    const body = el('span');
+    body.append(el('b', null, title), el('small', null, detail));
+    const go = el('span', 'go');
+    go.innerHTML = ICONS.chevron;
+    row.append(check, body, go);
+    return row;
+  }
+  function welcomeNode() {
+    const box = el('section', 'welcome');
+    box.append(el('div', 'tip', convoTitle(convo) + ' · ' + fmtDay(convo.createdAt)));
+    const card = el('div', 'setup');
+    card.append(el('h1', null, 'OnCue'));
+    card.append(el('p', 'lede', mode === 'voice'
+      ? '对方问问题时，手机在旁边听着。听出是问题，你要说的话就出现在右边的气泡里。'
+      : '点下面的输入框，再点键盘上的麦克风开始听写。对方说完停一下，听出是问题，回答就出现在右边的气泡里。'));
+    const words = tidy(resumeOf(convo)).length;
+    card.append(setupRow(!!words, convo.ownResume ? '这场的简历' : '我的简历', words ? '已写 ' + words.toLocaleString() + ' 字' : '写下或上传，回答才会像你', convo.ownResume ? 'convo' : 'settings'));
+    const hasJob = !!tidy(convo.company + convo.role + convo.jd);
+    card.append(setupRow(hasJob, '公司、岗位和职位描述', hasJob ? convoTitle(convo) + (tidy(convo.jd) ? ' · 有 JD' : '') : '填上后回答会更贴合这个岗位', 'convo'));
+    const prepped = convo.prep.qa.length;
+    card.append(setupRow(!!prepped, '面试准备（推荐）', prepped ? '已准备 ' + prepped + ' 个问题，问到时直接显示' : '按 JD 预测问题、提前写好回答，现场更快更稳', 'prep'));
+    if (engine.kind === 'api') card.append(setupRow(!!apiKey, 'Anthropic API Key', apiKey ? '已填写' : '在 console.anthropic.com 创建', 'settings'));
+    box.append(card);
+    box.append(el('div', 'tip', '视频或电话面试：用电脑外放声音（别戴耳机），把 iPhone 放在电脑旁边'));
+    if (IN_CLAUDE) {
+      box.append(el('div', 'tip', '用你的 Claude 会员写回答，不用另外付费。iPhone 要先在「设置 → 通用 → 键盘」打开「启用听写」'));
+      if (STANDALONE_URL) {
+        const tip = el('div', 'tip', '想按一下就一直自动听（要 API Key）：');
+        const a = el('a', null, STANDALONE_URL.replace(/^https?:\/\//, ''));
+        a.href = STANDALONE_URL;
+        a.target = '_blank';
+        a.rel = 'noopener';
+        a.style.color = 'var(--accent-ink)';
+        tip.append(a);
+        box.append(tip);
+      }
+    }
+    box.append(el('div', 'tip', '下面是示例'));
+    const ex = EXAMPLES[S.hearLang];
+    const turn = el('div', 'turn');
+    const sample = el('div', 'bubble me');
+    renderAnswerInto(sample, S.style === 'script' ? ex.a : ex.h, false);
+    turn.append(el('div', 'bubble them', ex.q), sample);
+    box.append(turn);
+    return box;
+  }
+
+  const isShown = (t) => t.kind !== 'statement' && (t.status === 'error' || ((t.status === 'streaming' || t.status === 'done') && !!t.a));
+  const currentTurn = (c) => c.turns.find(isShown) || null;
+  function roleOf(t, cur) {
+    if (t === cur) return 'current';
+    if (t.kind === 'statement') return 'statement';
+    if (!isShown(t)) return 'pending';
+    return 'past';
+  }
+
+  // Bracketed notes such as [填：用的哪个型号] are details for the user to supply, so they stand out.
+  function withFills(text) {
+    const frag = document.createDocumentFragment();
+    let last = 0;
+    for (const m of text.matchAll(/\[[^\]\n]{1,60}\]/g)) {
+      frag.append(text.slice(last, m.index), el('mark', 'fill', m[0]));
+      last = m.index + m[0].length;
+    }
+    frag.append(text.slice(last));
+    return frag;
+  }
+  // "Opening sentence + cue lines": the sentence to say first stands out, the cues sit under it.
+  function renderAnswerInto(bubble, main, streaming) {
+    const lines = main.split('\n').filter((l) => l.trim());
+    const isCue = (l) => /^\s*[•·\-*]\s/.test(l);
+    let tail = bubble;
+    if (lines.length > 1 && !isCue(lines[0]) && lines.slice(1).some(isCue)) {
+      const opener = el('span', 'opener');
+      opener.append(withFills(lines[0].trim()));
+      tail = el('span', 'cues');
+      tail.append(withFills(lines.slice(1).join('\n')));
+      bubble.append(opener, tail);
+    } else {
+      bubble.append(withFills(main));
+    }
+    if (streaming) tail.append(el('span', 'caret'));
+  }
+
+  // Their bubble shows the question the model picked out, with what was actually heard underneath.
+  function fillThem(bubble, t) {
+    const { question } = splitAnswer(t.a || '');
+    bubble.replaceChildren();
+    if (question) bubble.append(el('b', 'q-main', question), el('span', 'q-raw', t.q));
+    else bubble.append(t.q);
+  }
+  function turnNode(t, role) {
+    const box = el('div', 'turn is-' + role);
+    box.dataset.id = t.id;
+    box.dataset.role = role;
+    const them = el('div', 'bubble them');
+    fillThem(them, t);
+    box.append(them);
+    if (role === 'statement') { box.append(el('div', 'caption', '无需回答')); return box; }
+    if (role === 'pending') {
+      const dots = el('div', 'bubble me typing');
+      dots.setAttribute('aria-label', '正在想');
+      dots.append(el('i'), el('i'), el('i'));
+      box.append(dots);
+      if (engine.kind === 'sample' && firstSample) box.append(el('div', 'meta', '第一次用会弹窗，请选择允许'));
+      return box;
+    }
+    box.append(el('div', 'bubble me' + (role === 'current' ? ' is-big' : '')));
+    if (role === 'current') box.append(el('div', 'meta'));
+    fillTurn(box, t, role);
+    return box;
+  }
+  function fillTurn(box, t, role) {
+    fillThem(box.querySelector('.bubble.them'), t);
+    const bubble = box.querySelector('.bubble.me');
+    const { main, gloss } = splitAnswer(t.a || '');
+    bubble.replaceChildren();
+    bubble.classList.toggle('is-error', t.status === 'error' && !main);
+    if (main) renderAnswerInto(bubble, main, t.status === 'streaming');
+    else if (t.status === 'error') bubble.append(t.err);
+    if (gloss) {
+      const g = el('span', 'gloss');
+      for (const line of gloss.split('\n').map((s) => s.trim()).filter(Boolean)) {
+        const p = el('span');
+        const m = line.match(/^(问|答)[：:]\s*(.*)$/);
+        if (m) { p.append(el('b', null, m[1])); p.append(m[2]); }
+        else p.textContent = line;
+        g.append(p);
+      }
+      bubble.append(g);
+    }
+    const meta = box.querySelector('.meta');
+    if (!meta || role !== 'current') return;
+    meta.replaceChildren();
+    if (t.status === 'error' && main) meta.append(el('span', null, t.err));
+    if (t.ttft) meta.append(el('span', null, Math.max(0.1, t.ttft / 1000).toFixed(1) + ' 秒出字'));
+    if (t.status === 'done' && main && !/^\s*•/m.test(main)) meta.append(el('span', null, '约 ' + speakSeconds(main) + ' 秒念完'));
+    if (t.model) meta.append(el('span', null, t.model));
+    const busy = t.status === 'thinking' || t.status === 'streaming';
+    if (main && !busy) meta.append(actButton('复制', 'copy'));
+    meta.append(busy ? actButton('停止', 'stop') : actButton('重答', 'redo'));
+  }
+
+  function liveNode() {
+    const live = heardSoFar();
+    if (mode !== 'voice' || (!hear.pending && !live)) return null;
+    const bubble = el('div', 'bubble them is-live');
+    bubble.id = 'live';
+    if (hear.pending) bubble.append(el('span', 'held', tail(hear.pending, 160) + (live ? ' ' : '')));
+    if (live) bubble.append(tail(live, 220));
+    return bubble;
+  }
+
+  function renderAll(forceBottom) {
+    const stick = forceBottom || nearBottom();
+    $('#convoName').textContent = convoTitle(convo);
+    const box = $('#chatInner');
+    box.replaceChildren();
+    const turns = convo.turns;
+    if (!turns.length) {
+      if (engine.kind === 'none') box.append(noticeNode());
+      box.append(welcomeNode());
+    } else {
+      const notice = noticeNode();
+      if (notice) box.append(notice);
+      box.append(el('div', 'tip', convoTitle(convo) + ' · ' + fmtDay(convo.createdAt)));
+      const cur = currentTurn(convo);
+      for (const t of turns.slice().reverse()) box.append(turnNode(t, roleOf(t, cur)));
+    }
+    const live = liveNode();
+    if (live) box.append(live);
+    renderDock();
+    updateStatus();
+    if (!turns.length && !live) chatEl.scrollTop = 0;
+    else if (stick) { if (live) toBottom(); else anchorNewest(); }
+  }
+  function paintTurn(t) {
+    if (!convo.turns.includes(t)) return;
+    const box = document.querySelector('.turn[data-id="' + t.id + '"]');
+    const role = roleOf(t, currentTurn(convo));
+    if (!box || box.dataset.role !== role) { renderAll(role === 'current'); return; }   // a new answer always comes into view
+    const stick = nearBottom();
+    if (role === 'current' || role === 'past') fillTurn(box, t, role);
+    if (stick) anchorNewest();
+  }
+  function paintCaption() {
+    const stick = nearBottom();
+    const old = $('#live');
+    const live = liveNode();
+    if (old && live) old.replaceWith(live);
+    else if (old) old.remove();
+    else if (live) {
+      if (!convo.turns.length) { renderAll(true); return; }
+      $('#chatInner').append(live);
+    }
+    if (live && stick) toBottom();
+  }
+
+  function renderDock() {
+    const typing = mode === 'type';
+    const canVoice = !IN_CLAUDE && !!getSR();
+    const modeBtn = $('#modeBtn');
+    modeBtn.hidden = !canVoice;
+    modeBtn.innerHTML = typing ? ICONS.mic : ICONS.keyboard;
+    modeBtn.setAttribute('aria-label', typing ? '改用自动收音' : '改用打字');
+    $('#listenBtn').hidden = typing;
+    sayEl.hidden = !typing;
+    $('#clearBtn').hidden = !typing || !sayEl.value;
+    $('#sendBtn').setAttribute('aria-label', typing ? '回答' : '立即回答');
+    paintListen();
+  }
+  function paintListen() {
+    const btn = $('#listenBtn');
+    btn.setAttribute('aria-pressed', String(hear.on));
+    btn.replaceChildren();
+    const icon = el('span');
+    icon.innerHTML = hear.on ? ICONS.pause : ICONS.mic;
+    btn.append(icon, el('span', null, hear.on ? '正在听 ' + fmtClock(Date.now() - hear.since) + ' · 点击暂停' : '点击开始听'));
+  }
+
+  let noteTimer = 0;
+  function note(text, ms = 3500) {
+    const t = $('#toast');
+    t.textContent = text;
+    t.classList.add('is-on');
+    clearTimeout(noteTimer);
+    noteTimer = setTimeout(() => t.classList.remove('is-on'), ms);
+  }
+
+  function updateStatus() {
+    const busy = convo.turns.some((t) => t.status === 'thinking' || t.status === 'streaming');
+    let state = 'idle';
+    let text = mode === 'type' ? (IN_CLAUDE ? '听写模式' : '打字模式') : '待机';
+    if (hear.on) { state = 'listening'; text = '正在听 ' + fmtClock(Date.now() - hear.since); }
+    else if (busy) { state = 'thinking'; text = '正在写回答'; }
+    if (hear.on && busy) text += ' · 正在写回答';
+    $('#status').dataset.state = state;
+    $('#statusText').textContent = text;
+    if (mode === 'voice') paintListen();
+  }
+
+  // ---------- events ----------
+  $('#listenBtn').addEventListener('click', () => { if (hear.on) stopListening(); else startListening(); });
+  $('#sendBtn').addEventListener('click', answerNow);
+  $('#clearBtn').addEventListener('click', () => {
+    clearTimeout(typed.timer);
+    sayEl.value = '';
+    Object.assign(typed, { consumed: 0, lastLen: 0, dictated: false, startedAt: 0 });
+    fitSay();
+    sayEl.focus();
+  });
+  $('#modeBtn').addEventListener('click', () => setMode(mode === 'type' ? 'voice' : 'type', true));
+  $('#langBtn').addEventListener('click', () => {
+    S.hearLang = S.hearLang === 'en-US' ? 'zh-CN' : 'en-US';
+    savePrefs();
+    applyPrefs();
+    if (!convo.turns.length) renderAll();
+    note(S.hearLang === 'zh-CN' ? '现在按中文识别对方的话' : 'Now listening for English');
+    flushRec();
+    cancelEarly();
+  });
+
+  $('#chatInner').addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-act]');
+    if (!btn) return;
+    const act = btn.dataset.act;
+    const box = btn.closest('.turn');
+    const turn = box && convo.turns.find((t) => t.id === box.dataset.id);
+    if (act === 'settings') openSettings();
+    else if (act === 'convo') openConvoEditor(convo);
+    else if (act === 'prep') openPrep(convo);
+    else if (act === 'redo' && turn) answer(turn);
+    else if (act === 'stop' && turn) stopAnswer(turn);
+    else if (act === 'copy' && turn) {
+      const text = splitAnswer(turn.a).main;
+      const done = () => { btn.textContent = '已复制'; setTimeout(() => { btn.textContent = '复制'; }, 1500); };
+      const fallback = () => {
+        const range = document.createRange();
+        range.selectNodeContents(box.querySelector('.bubble.me'));
+        const sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
+        note('已选中回答，长按就能复制');
+      };
+      try { navigator.clipboard.writeText(text).then(done, fallback); } catch { fallback(); }
+    }
+  });
+
+  // ---------- sheets ----------
+  function showSheet(d) { if (typeof d.showModal === 'function') d.showModal(); else d.setAttribute('open', ''); }
+  function hideSheet(d) {
+    if (typeof d.close === 'function' && d.open) d.close();
+    else d.removeAttribute('open');
+    renderAll();   // the close event can arrive late, so refresh right away
+  }
+  for (const d of document.querySelectorAll('dialog.sheet')) {
+    d.querySelector('[data-close]').addEventListener('click', () => hideSheet(d));
+    d.addEventListener('close', () => renderAll());   // Esc or the back gesture
+  }
+  // Destructive buttons ask for a second tap instead of a dialog.
+  function confirmTap(btn, label) {
+    if (btn.dataset.armed && Date.now() - Number(btn.dataset.armed) < 3000) { delete btn.dataset.armed; btn.textContent = btn.dataset.label; return true; }
+    btn.dataset.label = btn.dataset.label || btn.textContent;
+    btn.dataset.armed = String(Date.now());
+    btn.textContent = label;
+    setTimeout(() => { if (btn.dataset.armed) { delete btn.dataset.armed; btn.textContent = btn.dataset.label; } }, 3000);
+    return false;
+  }
+
+  // Conversation list
+  const convosSheet = $('#convosSheet');
+  function avatarFor(c) {
+    const name = tidy(c.company) || tidy(c.role) || '新';
+    let h = 0;
+    for (const ch of name) h = (h * 31 + ch.codePointAt(0)) >>> 0;
+    const a = el('span', 'avatar', Array.from(name)[0].toUpperCase());
+    a.style.background = AVATAR_COLORS[h % AVATAR_COLORS.length];
+    a.setAttribute('aria-hidden', 'true');
+    return a;
+  }
+  function renderConvoList() {
+    const list = $('#convoList');
+    list.replaceChildren();
+    for (const c of convos.slice().sort((a, b) => b.updatedAt - a.updatedAt)) {
+      const row = el('button', 'chat-row');
+      row.type = 'button';
+      row.dataset.pick = c.id;
+      const latest = c.turns[0];
+      const answered = c.turns.filter((t) => t.kind !== 'statement').length;
+      const main = el('span', 'cr-main');
+      main.append(el('b', null, convoTitle(c)), el('small', null, latest ? latest.q : (tidy(c.jd) ? '已填职位描述，还没有问答' : '还没有问答')));
+      const side = el('span', 'cr-side');
+      side.append(el('span', null, fmtDay(c.updatedAt)));
+      side.append(c === convo ? el('span', 'now', '正在用') : el('span', null, answered ? answered + ' 条' : ''));
+      row.append(avatarFor(c), main, side);
+      list.append(row);
+    }
+  }
+  $('#listBtn').addEventListener('click', () => { renderConvoList(); showSheet(convosSheet); });
+  $('#convoList').addEventListener('click', (e) => {
+    const pick = e.target.closest('[data-pick]');
+    const c = pick && convos.find((x) => x.id === pick.dataset.pick);
+    if (!c) return;
+    switchConvo(c);
+    hideSheet(convosSheet);
+  });
+  $('#newConvoBtn').addEventListener('click', () => {
+    const c = newConvo();
+    convos.unshift(c);
+    switchConvo(c);
+    saveConvos(c);
+    hideSheet(convosSheet);
+    openConvoEditor(c);
+  });
+
+  // Conversation details
+  const convoSheet = $('#convoSheet');
+  let editing = null;
+  let editTimer = 0;
+  function showResumeBox(c) {
+    $('#cResume').hidden = !c.ownResume;
+    $('#cUploadRow').hidden = !c.ownResume;
+    $('#cResumeFoot').textContent = c.ownResume ? '只用于这场对话。' : '通用简历在「设置」里填写，所有对话共用。';
+  }
+  function openConvoEditor(c) {
+    editing = c;
+    $('#cCompany').value = c.company;
+    $('#cRole').value = c.role;
+    $('#cJd').value = c.jd;
+    $('#cNotes').value = c.notes;
+    $('#cResume').value = c.resume;
+    for (const r of document.querySelectorAll('input[name="cOwnResume"]')) r.checked = r.value === (c.ownResume ? '1' : '0');
+    $('#cUploadStatus').textContent = '';
+    $('#cPrepFoot').textContent = c.prep.qa.length
+      ? '已准备 ' + c.prep.qa.length + ' 个问题，问到相似的问题会直接显示。'
+      : '按简历和职位描述预测问题、提前写好回答，现场更快更稳。';
+    showResumeBox(c);
+    showSheet(convoSheet);
+  }
+  $('#cOpenPrep').addEventListener('click', () => {
+    const c = editing;
+    hideSheet(convoSheet);
+    if (c) openPrep(c);
+  });
+  $('#titleBtn').addEventListener('click', () => openConvoEditor(convo));
+  const editFields = { cCompany: 'company', cRole: 'role', cJd: 'jd', cNotes: 'notes', cResume: 'resume' };
+  for (const [id, field] of Object.entries(editFields)) {
+    $('#' + id).addEventListener('input', (e) => {
+      if (!editing) return;
+      editing[field] = e.target.value.slice(0, MAX_TEXT);
+      if (editing === convo) $('#convoName').textContent = convoTitle(convo);
+      const c = editing;
+      clearTimeout(editTimer);
+      editTimer = setTimeout(() => touch(c), 500);
+    });
+  }
+  convoSheet.addEventListener('change', (e) => {
+    if (e.target.name !== 'cOwnResume' || !editing) return;
+    editing.ownResume = e.target.value === '1';
+    if (editing.ownResume && !tidy(editing.resume) && tidy(S.profile)) {   // start from the general resume
+      editing.resume = S.profile;
+      $('#cResume').value = editing.resume;
+    }
+    showResumeBox(editing);
+    touch(editing);
+  });
+  $('#cUpload').addEventListener('click', () => {
+    const c = editing;
+    pickResumeFile($('#cResume'), $('#cUploadStatus'), (text) => { c.resume = text; touch(c); });
+  });
+  $('#cClearTurns').addEventListener('click', (e) => {
+    if (!editing || !confirmTap(e.currentTarget, '再点一次确认清空')) return;
+    for (const t of editing.turns) if (t.ctl) t.ctl.abort();
+    editing.turns = [];
+    touch(editing);
+    note('这场对话的问答已清空');
+  });
+  $('#cDelete').addEventListener('click', (e) => {
+    if (!editing || !confirmTap(e.currentTarget, '再点一次确认删除')) return;
+    const gone = editing;
+    for (const t of gone.turns) if (t.ctl) t.ctl.abort();
+    convos = convos.filter((c) => c !== gone);
+    cloud.dropConvo(gone.id);
+    if (!convos.length) convos.push(newConvo());
+    if (gone === convo) {
+      convo = convos.slice().sort((a, b) => b.updatedAt - a.updatedAt)[0];
+      S.activeId = convo.id;
+      savePrefs();
+    }
+    editing = null;
+    saveConvos(null);
+    hideSheet(convoSheet);
+    note('对话已删除');
+  });
+
+  // Interview prep: likely questions with the user's own reviewed answers, plus their core stories.
+  const prepSheet = $('#prepSheet');
+  let prepFor = null;
+  let prepTimer = 0;
+  let prepCtl = null;
+  const countGaps = (c) => (c.prep.qa.map((p) => p.a).join('\n') + '\n' + c.prep.stories).split('[填').length - 1;
+  function paintPrepStatus(msg) {
+    const n = prepFor.prep.qa.length;
+    const gaps = countGaps(prepFor);
+    $('#prepStatus').textContent = msg || (n
+      ? '已准备 ' + n + ' 个问题' + (prepFor.prep.at ? '（' + fmtDay(prepFor.prep.at) + ' 生成）' : '') + '。'
+        + (gaps ? '还有 ' + gaps + ' 处 [填：…] 等你补上真实细节，补完问到细节时才答得上来。' : '') + '重新生成会替换下面的问题和故事。'
+      : '需要先有简历；填了职位描述会准得多。生成要 1–2 分钟。');
+    if (!$('#prepGen').dataset.armed) $('#prepGen').textContent = prepCtl ? '正在生成…' : n ? '重新生成' : '根据简历和 JD 生成预测问题';
+  }
+  function renderPrepList() {
+    const list = $('#prepList');
+    list.replaceChildren();
+    for (const p of prepFor.prep.qa) {
+      const item = el('div', 'group prep-item');
+      item.dataset.pid = p.id;
+      const q = el('textarea', 'prep-q');
+      q.rows = 2;
+      q.value = p.q;
+      q.placeholder = '面试官可能会问的问题';
+      q.dataset.field = 'q';
+      q.setAttribute('aria-label', '问题');
+      item.append(q);
+      if (tidy(p.qZh)) item.append(el('p', 'prep-zh', p.qZh));
+      const a = el('textarea', 'prep-a');
+      a.rows = 5;
+      a.value = p.a;
+      a.placeholder = '第一句写完整，后面每行一个要点，用 • 开头';
+      a.dataset.field = 'a';
+      a.setAttribute('aria-label', '回答');
+      const del = el('button', 'row-btn danger', '删除这个问题');
+      del.type = 'button';
+      del.dataset.del = '1';
+      item.append(a, del);
+      list.append(item);
+    }
+  }
+  function openPrep(c) {
+    prepFor = c;
+    $('#prepStories').value = c.prep.stories;
+    renderPrepList();
+    paintPrepStatus();
+    showSheet(prepSheet);
+  }
+  function savePrepSoon() {
+    const c = prepFor;
+    clearTimeout(prepTimer);
+    prepTimer = setTimeout(() => touch(c), 500);
+  }
+  $('#prepList').addEventListener('input', (e) => {
+    const item = e.target.closest('.prep-item');
+    const field = e.target.dataset.field;
+    const p = item && prepFor && prepFor.prep.qa.find((x) => x.id === item.dataset.pid);
+    if (!p || !field) return;
+    p[field] = e.target.value.slice(0, field === 'q' ? 500 : 3000);
+    savePrepSoon();
+  });
+  $('#prepList').addEventListener('click', (e) => {
+    const del = e.target.closest('[data-del]');
+    if (!del || !prepFor || !confirmTap(del, '再点一次确认删除')) return;
+    const id = del.closest('.prep-item').dataset.pid;
+    prepFor.prep.qa = prepFor.prep.qa.filter((x) => x.id !== id);
+    touch(prepFor);
+    renderPrepList();
+    paintPrepStatus();
+  });
+  $('#prepAdd').addEventListener('click', () => {
+    if (!prepFor) return;
+    prepFor.prep.qa.push({ id: uid(), q: '', qZh: '', a: '' });
+    renderPrepList();
+    const inputs = $('#prepList').querySelectorAll('[data-field="q"]');
+    inputs[inputs.length - 1].focus();
+  });
+  $('#prepStories').addEventListener('input', (e) => {
+    if (!prepFor) return;
+    prepFor.prep.stories = e.target.value.slice(0, MAX_TEXT);
+    savePrepSoon();
+  });
+
+  function prepFormat() {
+    if (S.style === 'script') return 'Write 4-7 short spoken sentences, the direct answer first.';
+    if (S.style === 'points') return 'Write 3-6 lines, each starting with "• " and under 12 words, in the order to say them.';
+    return 'Write one complete opening sentence that answers directly, then 3-6 lines, each starting with "• " and under 12 words, with the points to cover in order.';
+  }
+  function buildPrepPrompt(c) {
+    const interviewLang = S.hearLang === 'zh-CN' ? 'Chinese' : 'English';
+    const answerLang = S.replyLang === 'zh' ? 'Simplified Chinese' : S.replyLang === 'en' ? 'English' : interviewLang;
+    const parts = [
+      'Help a candidate prepare for a job interview. Use only facts from the resume; never invent experience, numbers or skills.',
+      '', '<resume>', resumeOf(c), '</resume>',
+    ];
+    const job = [];
+    if (tidy(c.company)) job.push('Company: ' + c.company.trim());
+    if (tidy(c.role)) job.push('Role: ' + c.role.trim());
+    if (tidy(c.jd)) job.push('Job description:', c.jd.trim());
+    if (job.length) parts.push('', '<the_job>', ...job, '</the_job>');
+    if (tidy(c.notes)) parts.push('', '<notes>', c.notes.trim(), '</notes>');
+    parts.push(
+      '',
+      'Reply with only a JSON object of this shape:',
+      '{"stories": [{"title": "...", "text": "..."}], "questions": [{"q": "...", "qZh": "...", "a": "..."}]}',
+      '- stories: the 4-6 experiences from the resume that best fit this job. For each, a short title and 3-5 sentences: the situation, what the candidate did (with the technical choices and the hardest problem, if the resume says), and the result, with numbers if the resume has them.',
+      '- questions: the 16 questions this interviewer is most likely to ask for this role: 3 about background and motivation (including why this company and role), 4 behavioral, 3 situational or emotional-intelligence (conflict, pressure, criticism, failure), 3 technical topics from the job description, and 3 detail follow-ups that dig into the candidate\'s main project (their exact part, how a result was measured, the hardest problem, what they would change). Write q in ' + interviewLang + ' as the interviewer would say it, and qZh as a short Simplified Chinese version.',
+      "- a: the candidate's answer in " + answerLang + ', in the first person, written to be spoken. ' + prepFormat(),
+      '- Whenever an answer or story needs a personal detail the resume does not give, do not invent it: write a short note in square brackets in Simplified Chinese telling the candidate what to fill in, such as [填：用的哪个型号].',
+    );
+    return parts.join('\n');
+  }
+  async function askJSON(prompt, signal, onProgress) {
+    if (engine.kind === 'sample') {
+      return engine.sample.json(prompt, { signal, modelTier: 'default', cache: false, onText: ({ text }) => onProgress(text.length) });
+    }
+    const c = await getClient();
+    const body = Object.assign({ model: S.model, max_tokens: 16000, messages: [{ role: 'user', content: prompt }] }, MODELS[S.model].params);
+    const stream = c.messages.stream(body, { signal });
+    let text = '';
+    stream.on('text', (delta) => { text += delta; onProgress(text.length); });
+    const msg = await stream.finalMessage();
+    if (msg.stop_reason === 'refusal') throw { code: 'refused' };
+    const start = text.indexOf('{');
+    const end = text.lastIndexOf('}');
+    if (start < 0 || end <= start) throw { code: 'invalid_json' };
+    try { return JSON.parse(text.slice(start, end + 1)); } catch { throw { code: 'invalid_json' }; }
+  }
+  $('#prepGen').addEventListener('click', async (e) => {
+    const c = prepFor;
+    const btn = e.currentTarget;
+    if (!c || prepCtl) return;
+    if (!resumeOf(c)) { paintPrepStatus('先在「设置」里写下或上传简历，再来生成。'); return; }
+    if (c.prep.qa.length && !confirmTap(btn, '再点一次：替换现有问题')) return;
+    if (engine.kind === 'pending') await engineReady;
+    if (engine.kind !== 'sample' && engine.kind !== 'api') { paintPrepStatus(describeError({ code: 'no_engine' })); return; }
+    const ctl = new AbortController();
+    prepCtl = ctl;
+    paintPrepStatus('正在准备，大约 1–2 分钟' + (engine.kind === 'sample' && firstSample ? '（第一次用会弹窗请你允许）' : '') + '…');
+    try {
+      const data = await askJSON(buildPrepPrompt(c), ctl.signal, (n) => { if (prepFor === c) paintPrepStatus('正在准备，已写 ' + n.toLocaleString() + ' 字…'); });
+      const qa = (Array.isArray(data && data.questions) ? data.questions : [])
+        .map((x) => ({ id: uid(), q: String((x && x.q) || '').slice(0, 500), qZh: String((x && x.qZh) || '').slice(0, 200), a: String((x && x.a) || '').slice(0, 3000) }))
+        .filter((x) => tidy(x.q) && tidy(x.a)).slice(0, 30);
+      if (!qa.length) throw { code: 'invalid_json' };
+      const stories = (Array.isArray(data.stories) ? data.stories : [])
+        .map((s) => [String((s && s.title) || '').trim(), String((s && s.text) || '').trim()].filter(Boolean).join('\n'))
+        .filter(Boolean).join('\n\n');
+      c.prep = { qa, stories: stories.slice(0, MAX_TEXT), at: Date.now() };
+      prepCtl = null;
+      touch(c);
+      if (prepFor === c) { $('#prepStories').value = c.prep.stories; renderPrepList(); paintPrepStatus(); }
+      if (c === convo && !prepSheet.open) renderAll();
+    } catch (err) {
+      prepCtl = null;
+      if (!ctl.signal.aborted && !(err && err.code === 'cancelled') && prepFor === c) paintPrepStatus('没生成成功：' + describeError(err));
+    } finally {
+      if (prepCtl === ctl) prepCtl = null;
+      if (engine.kind === 'sample') firstSample = false;
+    }
+  });
+
+  // Settings
+  const dlg = $('#settings');
+  const radios = (name) => Array.from(dlg.querySelectorAll('input[name="' + name + '"]'));
+  const wordCount = (s) => (tidy(s) ? '已写 ' + tidy(s).length.toLocaleString() + ' 字' : '');
+  function fillSettings() {
+    $('#profile').value = S.profile;
+    for (const name of ['hearLang', 'replyLang', 'length', 'style', 'pause', 'model', 'tier']) {
+      for (const r of radios(name)) r.checked = String(S[name]) === r.value;
+    }
+    $('#gloss').checked = S.gloss;
+    $('#auto').checked = S.auto;
+    $('#fontSize').value = S.fontSize;
+    $('#fontSizeOut').textContent = S.fontSize + 'px';
+    $('#apiKey').value = apiKey;
+    $('#engineApi').hidden = IN_CLAUDE;
+    $('#engineSample').hidden = !IN_CLAUDE;
+    $('#pUploadStatus').textContent = wordCount(S.profile);
+    $('#privacyNote').textContent = IN_CLAUDE
+      ? '简历、对话资料和设置保存在你的 Claude 账号里，只有你能看到。识别出的文字和你的资料会发给 Claude 写回答。'
+      : '简历、对话资料、设置和 API Key 只存在这台设备的浏览器里。录音不保存：浏览器自带的识别服务（iPhone 是苹果，安卓是谷歌）把声音转成文字，文字和你的资料再发给 Anthropic 写回答。';
+  }
+  function openSettings() { fillSettings(); showSheet(dlg); }
+  $('#settingsBtn').addEventListener('click', openSettings);
+
+  let textTimer = 0;
+  $('#profile').addEventListener('input', (e) => {
+    S.profile = e.target.value.slice(0, MAX_TEXT);
+    $('#pUploadStatus').textContent = wordCount(S.profile);
+    clearTimeout(textTimer);
+    textTimer = setTimeout(savePrefs, 500);
+  });
+  $('#pUpload').addEventListener('click', () => {
+    pickResumeFile($('#profile'), $('#pUploadStatus'), (text) => { S.profile = text; savePrefs(); });
+  });
+  $('#tplBtn').addEventListener('click', () => {
+    const box = $('#profile');
+    box.value = box.value.trim() ? box.value.replace(/\s*$/, '\n\n') + RESUME_TEMPLATE : RESUME_TEMPLATE;
+    S.profile = box.value;
+    savePrefs();
+    box.focus();
+  });
+  dlg.addEventListener('change', (e) => {
+    const t = e.target;
+    if (t.type === 'radio' && t.name in S) {
+      S[t.name] = t.name === 'pause' ? Number(t.value) : t.value;
+      savePrefs();
+      applyPrefs();
+      if (t.name === 'hearLang') flushRec();
+    } else if (t.id === 'gloss' || t.id === 'auto') {
+      S[t.id] = t.checked;
+      savePrefs();
+    }
+  });
+  $('#fontSize').addEventListener('input', (e) => {
+    S.fontSize = Number(e.target.value);
+    $('#fontSizeOut').textContent = S.fontSize + 'px';
+    applyPrefs();
+    clearTimeout(textTimer);
+    textTimer = setTimeout(savePrefs, 300);
+  });
+  $('#apiKey').addEventListener('input', (e) => {
+    apiKey = e.target.value.trim();
+    writeText(APIKEY_KEY, apiKey);
+  });
+  $('#keyShow').addEventListener('click', (e) => {
+    const input = $('#apiKey');
+    const show = input.type === 'password';
+    input.type = show ? 'text' : 'password';
+    e.currentTarget.textContent = show ? '隐藏' : '显示';
+  });
+
+  // ---------- start ----------
+  document.documentElement.lang = 'zh-CN';
+  $('#langBtn').hidden = IN_CLAUDE;   // keyboard dictation follows the keyboard's own language
+  applyPrefs();
+  writeJSON(PREFS_KEY, S);
+  saveConvos(null);
+  renderAll(true);
+  cloud.init();
+})();
+</script>
+</body>
+</html>
