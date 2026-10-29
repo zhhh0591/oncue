@@ -181,10 +181,26 @@ mark.fill { padding: 0 3px; border-radius: 4px; background: var(--fill); color: 
 
 /* Input bar */
 .inputbar {
-  flex: none; position: relative; display: flex; align-items: flex-end; gap: 8px;
+  flex: none; position: relative; display: flex; flex-direction: column; gap: 8px;
   padding-block: 8px; padding-left: var(--gutter-l); padding-right: var(--gutter-r);
   background: var(--bar); border-top: 1px solid var(--line);
 }
+.ctl-row { display: flex; align-items: flex-end; gap: 8px; }
+/* The live transcript sits in a fixed strip here, so it never scrolls the answers or steals focus. */
+.livebar {
+  display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 8px;
+  background: var(--card); font-size: 14px; line-height: 1.45; color: var(--muted);
+}
+.livebar .ear { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--rec); animation: pulse 1.4s ease-in-out infinite; }
+.livebar .cap { flex: 1; min-width: 0; max-height: 3.1em; overflow: hidden; }
+.livebar .cap .held { color: var(--accent-ink); }
+.jump {
+  position: absolute; left: 50%; bottom: calc(100% + 8px); transform: translateX(-50%);
+  display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 14px; border: 0; border-radius: 999px;
+  background: var(--accent); color: var(--on-accent); font-size: 14px; font-weight: 600;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, .25);
+}
+.jump svg { width: 16px; height: 16px; }
 .ib-icon { flex: none; width: 36px; height: 44px; padding: 0; border: 0; background: none; display: grid; place-items: center; color: var(--ink); }
 .ib-icon svg { width: 28px; height: 28px; }
 .listen {
@@ -326,15 +342,24 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
 
   <footer class="inputbar">
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <button type="button" class="ib-icon" id="modeBtn" aria-label="改用打字"></button>
-    <button type="button" class="ib-icon" id="clearBtn" aria-label="清空输入框" hidden>
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M9 9l6 6M15 9l-6 6"/></svg>
+    <button type="button" class="jump" id="jumpBtn" hidden>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg><span>新回答</span>
     </button>
-    <button type="button" class="listen" id="listenBtn" aria-pressed="false"></button>
-    <textarea id="say" rows="1" enterkeyhint="send" autocomplete="off" placeholder="点这里，再点键盘上的麦克风听写" hidden></textarea>
-    <button type="button" class="send" id="sendBtn" aria-label="立即回答">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
-    </button>
+    <div class="livebar" id="livebar" aria-live="polite" hidden>
+      <span class="ear" aria-hidden="true"></span>
+      <span class="cap" id="livecap"></span>
+    </div>
+    <div class="ctl-row">
+      <button type="button" class="ib-icon" id="modeBtn" aria-label="改用打字"></button>
+      <button type="button" class="ib-icon" id="clearBtn" aria-label="清空输入框" hidden>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M9 9l6 6M15 9l-6 6"/></svg>
+      </button>
+      <button type="button" class="listen" id="listenBtn" aria-pressed="false"></button>
+      <textarea id="say" rows="1" enterkeyhint="send" autocomplete="off" placeholder="点这里，再点键盘上的麦克风听写" hidden></textarea>
+      <button type="button" class="send" id="sendBtn" aria-label="立即回答">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+      </button>
+    </div>
   </footer>
 </div>
 
@@ -1214,6 +1239,7 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
     const pre = source === 'voice' ? takeEarly(text) : (cancelEarly(), null);
     if (!text) return;
     const turns = convo.turns;
+    const userDriven = source === 'manual' || source === 'dictation';   // auto-heard questions don't yank the reader
     if (source === 'voice' || source === 'dictation') {
       if (isOwnVoice(text)) { if (pre) pre.ctl.abort(); return note('听起来是你在念回答，已跳过'); }
       if (!S.auto || isAck(text)) {
@@ -1230,7 +1256,7 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
         last.heardAt = Date.now();
         hear.pending = '';
         answer(last);
-        renderAll(true);
+        renderAll(userDriven);
         return;
       }
     }
@@ -1249,7 +1275,7 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
     } else {
       answer(turn, pre);
     }
-    renderAll(true);
+    renderAll(userDriven);
   }
 
   // ---------- answering early (API only) ----------
@@ -1603,16 +1629,32 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
 
   const chatEl = $('#chat');
   const nearBottom = () => chatEl.scrollHeight - chatEl.scrollTop - chatEl.clientHeight < 160;
-  const toBottom = () => { chatEl.scrollTop = chatEl.scrollHeight; };
-  // Keep the newest exchange in view from its first line: a long answer stays anchored at its start
-  // instead of scrolling away while it is still being written.
+  // follow = track the newest answer. The user scrolling up to re-read an old answer turns it off, so a new
+  // answer never yanks them away; a "新回答" button brings them back. Our own scrolls set ignoreScroll so the
+  // listener doesn't mistake them for the user (anchoring a tall answer to the top is not "near bottom").
+  let follow = true;
+  let ignoreScroll = 0;
+  function setScroll(top) { ignoreScroll = Date.now(); chatEl.scrollTop = top; }
+  const toBottom = () => setScroll(chatEl.scrollHeight);
+  // Put the newest exchange's first line near the top, so a long answer reads top-to-bottom and the previous
+  // answer stays just above (scroll up to see it), instead of the newest covering it.
   function anchorNewest() {
     const all = $('#chatInner').querySelectorAll('.turn[data-id]');
     const last = all[all.length - 1];
     const bottom = chatEl.scrollHeight - chatEl.clientHeight;
-    if (!last) { chatEl.scrollTop = bottom; return; }
+    if (!last) { setScroll(bottom); return; }
     const top = chatEl.scrollTop + last.getBoundingClientRect().top - chatEl.getBoundingClientRect().top - 8;
-    chatEl.scrollTop = Math.max(0, Math.min(bottom, top));
+    setScroll(Math.max(0, Math.min(bottom, top)));
+  }
+  chatEl.addEventListener('scroll', () => {
+    if (Date.now() - ignoreScroll < 250) return;   // our own scroll, not the user's
+    follow = nearBottom();
+    $('#jumpBtn').hidden = follow || !convo.turns.length;
+  });
+  function jumpToNewest() {
+    follow = true;
+    anchorNewest();
+    $('#jumpBtn').hidden = true;
   }
 
   function noticeNode() {
@@ -1776,18 +1818,8 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
     meta.append(busy ? actButton('停止', 'stop') : actButton('重答', 'redo'));
   }
 
-  function liveNode() {
-    const live = heardSoFar();
-    if (mode !== 'voice' || (!hear.pending && !live)) return null;
-    const bubble = el('div', 'bubble them is-live');
-    bubble.id = 'live';
-    if (hear.pending) bubble.append(el('span', 'held', tail(hear.pending, 160) + (live ? ' ' : '')));
-    if (live) bubble.append(tail(live, 220));
-    return bubble;
-  }
-
-  function renderAll(forceBottom) {
-    const stick = forceBottom || nearBottom();
+  function renderAll(resetFollow) {
+    if (resetFollow) follow = true;
     $('#convoName').textContent = convoTitle(convo);
     const box = $('#chatInner');
     box.replaceChildren();
@@ -1802,35 +1834,34 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
       const cur = currentTurn(convo);
       for (const t of turns.slice().reverse()) box.append(turnNode(t, roleOf(t, cur)));
     }
-    const live = liveNode();
-    if (live) box.append(live);
     renderDock();
     updateStatus();
-    if (!turns.length && !live) chatEl.scrollTop = 0;
-    else if (stick) { if (live) toBottom(); else anchorNewest(); }
+    paintCaption();
+    if (!turns.length) setScroll(0);
+    else if (follow) anchorNewest();
+    $('#jumpBtn').hidden = follow || !turns.length;
   }
   function paintTurn(t) {
     if (!convo.turns.includes(t)) return;
     const box = document.querySelector('.turn[data-id="' + t.id + '"]');
     const role = roleOf(t, currentTurn(convo));
-    if (!box || box.dataset.role !== role) { renderAll(role === 'current'); return; }   // a new answer always comes into view
-    const stick = nearBottom();
+    if (!box || box.dataset.role !== role) { renderAll(); return; }   // a new turn: respect follow, don't yank
     if (role === 'current' || role === 'past') fillTurn(box, t, role);
-    if (stick) anchorNewest();
+    // No scroll while an answer streams — the user reads at their own pace; follow handles new turns.
   }
+  // The live transcript lives in a fixed strip above the controls, so it never scrolls the answers.
   function paintCaption() {
-    const stick = nearBottom();
-    const old = $('#live');
-    const live = liveNode();
-    if (old && live) old.replaceWith(live);
-    else if (old) old.remove();
-    else if (live) {
-      if (!convo.turns.length) { renderAll(true); return; }
-      $('#chatInner').append(live);
-    }
-    if (live && stick) toBottom();
+    const live = heardSoFar();
+    const show = mode === 'voice' && hear.on;
+    const bar = $('#livebar');
+    bar.hidden = !show;
+    if (!show) return;
+    const cap = $('#livecap');
+    cap.replaceChildren();
+    if (hear.pending) cap.append(el('span', 'held', tail(hear.pending, 120) + (live ? ' ' : '')));
+    if (live) cap.append(tail(live, 180));
+    if (!hear.pending && !live) cap.append(el('span', null, '正在听…'));
   }
-
   function renderDock() {
     const typing = mode === 'type';
     const canVoice = !IN_CLAUDE && !!getSR();
@@ -1876,6 +1907,7 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
 
   // ---------- events ----------
   $('#listenBtn').addEventListener('click', () => { if (hear.on) stopListening(); else startListening(); });
+  $('#jumpBtn').addEventListener('click', jumpToNewest);
   $('#sendBtn').addEventListener('click', answerNow);
   $('#clearBtn').addEventListener('click', () => {
     clearTimeout(typed.timer);
