@@ -103,10 +103,6 @@ svg { display: block; }
 [data-state="listening"] .dot { background: var(--rec); animation: pulse 1.4s ease-in-out infinite; }
 [data-state="thinking"] .dot { background: var(--accent); }
 @keyframes pulse { 50% { opacity: .3; } }
-.lang {
-  flex: none; height: 30px; min-width: 40px; padding: 0 8px; border-radius: 8px;
-  border: 1px solid var(--line); background: var(--card); font-size: 13px; font-weight: 600;
-}
 
 /* Chat */
 .chat {
@@ -330,7 +326,6 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
       <b id="convoName">未命名对话</b>
       <span class="nav-sub" id="status" data-state="idle"><span class="dot" aria-hidden="true"></span><span id="statusText">待机</span></span>
     </button>
-    <button type="button" class="lang" id="langBtn" aria-label="对方说的语言">EN</button>
     <button type="button" class="nav-btn" id="settingsBtn" aria-label="设置">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
     </button>
@@ -355,7 +350,7 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M9 9l6 6M15 9l-6 6"/></svg>
       </button>
       <button type="button" class="listen" id="listenBtn" aria-pressed="false"></button>
-      <textarea id="say" rows="1" enterkeyhint="send" autocomplete="off" placeholder="点这里，再点键盘上的麦克风听写" hidden></textarea>
+      <textarea id="say" rows="1" enterkeyhint="send" autocomplete="off" placeholder="点这里，键盘切到英文，再点麦克风听写" hidden></textarea>
       <button type="button" class="send" id="sendBtn" aria-label="立即回答">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
       </button>
@@ -474,23 +469,8 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
     </div>
 
     <div class="section">
-      <p class="section-title">听和说</p>
+      <p class="section-title">回答</p>
       <div class="group">
-        <div class="row stack">
-          <span class="row-label" id="hearLangT">对方说的语言</span>
-          <div class="seg" role="radiogroup" aria-labelledby="hearLangT">
-            <label><input type="radio" name="hearLang" value="en-US"><span>英文</span></label>
-            <label><input type="radio" name="hearLang" value="zh-CN"><span>中文</span></label>
-          </div>
-        </div>
-        <div class="row stack">
-          <span class="row-label" id="replyLangT">回答用的语言</span>
-          <div class="seg" role="radiogroup" aria-labelledby="replyLangT">
-            <label><input type="radio" name="replyLang" value="same"><span>跟对方一样</span></label>
-            <label><input type="radio" name="replyLang" value="en"><span>英文</span></label>
-            <label><input type="radio" name="replyLang" value="zh"><span>中文</span></label>
-          </div>
-        </div>
         <div class="row stack">
           <span class="row-label" id="lengthT">回答长度</span>
           <div class="seg" role="radiogroup" aria-labelledby="lengthT">
@@ -596,13 +576,13 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
 
   const DEFAULTS = {
     profile: '', activeId: '',
-    hearLang: 'en-US', replyLang: 'same', length: 'medium', style: 'hybrid',
+    length: 'medium', style: 'hybrid',
     gloss: false, auto: true, pause: 1, fontSize: 21,
     model: 'claude-haiku-5-5', tier: 'quick',
     updatedAt: 0, v: 3,
   };
   const CHOICES = {
-    hearLang: ['en-US', 'zh-CN'], replyLang: ['same', 'en', 'zh'], length: ['short', 'medium', 'long'],
+    length: ['short', 'medium', 'long'],
     style: ['hybrid', 'script', 'points'], pause: [1, 1.4, 2.5], model: Object.keys(MODELS), tier: ['quick', 'default'],
   };
 
@@ -623,17 +603,10 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
     '不想提、要小心的话题：',
   ].join('\n');
 
-  const EXAMPLES = {
-    'en-US': {
-      q: 'So, tell me a little about yourself.',
-      a: "Sure. I'm a second-year engineering student, and outside class most of my time goes into our robotics team, where I write the motor-control code. I like problems where hardware and software meet, so I'm looking for a co-op in embedded systems.",
-      h: "Sure. I'm a second-year engineering student who likes the place where hardware meets software.\n• Robotics team: I write the motor-control code\n• Favorite part: debugging on real hardware\n• Now looking for an embedded systems co-op",
-    },
-    'zh-CN': {
-      q: '先简单介绍一下你自己吧。',
-      a: '好的。我现在是工程专业大二的学生，课外大部分时间在机器人队写电机控制程序。我喜欢软硬件结合的问题，所以想找一个嵌入式方向的实习。',
-      h: '好的，我是工程专业大二的学生，最喜欢软硬件结合的问题。\n• 机器人队：负责电机控制程序\n• 最喜欢在真机上调试\n• 现在想找嵌入式方向的实习',
-    },
+  const EXAMPLE = {
+    q: 'So, tell me a little about yourself.',
+    a: "Sure. I'm a second-year engineering student, and outside class most of my time goes into our robotics team, where I write the motor-control code. I like problems where hardware and software meet, so I'm looking for a co-op in embedded systems.",
+    h: "Sure. I'm a second-year engineering student who likes the place where hardware meets software.\n• Robotics team: I write the motor-control code\n• Favorite part: debugging on real hardware\n• Now looking for an embedded systems co-op",
   };
 
   const ICONS = {
@@ -840,9 +813,6 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
   function touch(c) { c.updatedAt = Date.now(); saveConvos(c); }
   function applyPrefs() {
     document.documentElement.style.setProperty('--read-size', S.fontSize + 'px');
-    $('#langBtn').textContent = S.hearLang === 'zh-CN' ? '中' : '英';
-    const zhReply = S.replyLang === 'zh' || (S.replyLang === 'same' && S.hearLang === 'zh-CN');
-    $('.size-demo').textContent = zhReply ? '好的，我很乐意聊聊这个。' : "Sure — I'd be happy to talk about that.";
   }
 
   function switchConvo(c) {
@@ -920,11 +890,6 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
     '  - Salary, other offers, start date or work authorization: honest, polite and flexible. Use only what about_me says; otherwise use a [填：…] note.',
   ].join('\n');
   const DEPTH_RULE = '- Questions that need depth include: walking through the user\'s background, resume or a project; "tell me about a time" questions (cover the situation, the task, what the user did step by step, and the result, with numbers if about_me has them); explaining how something works or how the user would design, debug or approach a technical problem; and several questions asked at once. Answer these fully: the direct answer first, then the details in a clear order, then a one-line wrap-up.';
-  const LANG_RULE = {
-    same: 'Reply in the language the other person is using. If they mix languages, use their main one.',
-    en: 'Always reply in English.',
-    zh: 'Always reply in Simplified Chinese.',
-  };
 
   const resumeOf = (c) => (c.ownResume ? c.resume : S.profile).trim();
   function buildRules(c, heardByMic) {
@@ -952,7 +917,7 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
     lines.push('', 'How to reply:', '- Write only what the user will say, in the first person, as the user. No preamble, labels, quotation marks, markdown, emoji or stage directions.');
     lines.push(...styleRules());
     lines.push(
-      '- ' + LANG_RULE[S.replyLang],
+      '- Always reply in English, even when the question is typed in Chinese.',
       '- Use only facts about the user from about_me, my_stories, prepared_answers and earlier in this conversation. Never invent employers, schools, numbers, dates, projects or skills. When a personal detail is missing, use a [填：…] note or bridge to a related real experience.',
       PLAYBOOK,
     );
@@ -976,8 +941,8 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
       lines.push('- If they did not ask a question (small talk, a comment, thanks), give a short natural reply that keeps the conversation going.');
     }
     lines.push('- After the reply, add a line containing only 【问题】, then what they asked, rewritten in Simplified Chinese as one short, clear question. If they asked several, number them (1. 2.).');
-    if (S.gloss && S.replyLang !== 'zh') {
-      lines.push('- Then add a line containing only 【中文】, then one line in Simplified Chinese with the gist of your reply. Skip this part if your reply is in Chinese.');
+    if (S.gloss) {
+      lines.push('- Then add a line containing only 【中文】, then one line in Simplified Chinese with the gist of your reply.');
     }
     return lines.join('\n');
   }
@@ -1366,7 +1331,7 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
       if (code === 'no-speech' || code === 'aborted') return;
       if (code === 'not-allowed' || code === 'service-not-allowed') return giveUp(MIC_HELP);
       if (code === 'audio-capture') return giveUp('找不到能用的麦克风。');
-      if (code === 'language-not-supported') return giveUp('这台设备不支持用这种语言识别，换一种试试。');
+      if (code === 'language-not-supported') return giveUp('这台设备不支持英文语音识别。');
       hear.fails++;
       if (code === 'network') note('语音识别需要联网，正在重试…');
     };
@@ -1386,7 +1351,7 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
     if (!hear.on || document.hidden || hear.running) return;
     try {
       if (!hear.rec) hear.rec = makeRec();
-      hear.rec.lang = S.hearLang;
+      hear.rec.lang = 'en-US';
       hear.flushing = false;
       hear.gotResult = false;
       hear.recStartedAt = Date.now();
@@ -1690,8 +1655,8 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
     const card = el('div', 'setup');
     card.append(el('h1', null, 'OnCue'));
     card.append(el('p', 'lede', mode === 'voice'
-      ? '对方问问题时，手机在旁边听着。听出是问题，你要说的话就出现在右边的气泡里。'
-      : '点下面的输入框，再点键盘上的麦克风开始听写。对方说完停一下，听出是问题，回答就出现在右边的气泡里。'));
+      ? '对方用英文提问时，手机在旁边听着。听出是问题，你要说的话就出现在右边的气泡里。'
+      : '点下面的输入框，把键盘切到英文，再点键盘上的麦克风开始听写。对方说完停一下，听出是问题，回答就出现在右边的气泡里。'));
     const words = tidy(resumeOf(convo)).length;
     card.append(setupRow(!!words, convo.ownResume ? '这场的简历' : '我的简历', words ? '已写 ' + words.toLocaleString() + ' 字' : '写下或上传，回答才会像你', convo.ownResume ? 'convo' : 'settings'));
     const hasJob = !!tidy(convo.company + convo.role + convo.jd);
@@ -1715,7 +1680,7 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
       }
     }
     box.append(el('div', 'tip', '下面是示例'));
-    const ex = EXAMPLES[S.hearLang];
+    const ex = EXAMPLE;
     const turn = el('div', 'turn');
     const sample = el('div', 'bubble me');
     renderAnswerInto(sample, S.style === 'script' ? ex.a : ex.h, false);
@@ -1919,15 +1884,6 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
     sayEl.focus();
   });
   $('#modeBtn').addEventListener('click', () => setMode(mode === 'type' ? 'voice' : 'type', true));
-  $('#langBtn').addEventListener('click', () => {
-    S.hearLang = S.hearLang === 'en-US' ? 'zh-CN' : 'en-US';
-    savePrefs();
-    applyPrefs();
-    if (!convo.turns.length) renderAll();
-    note(S.hearLang === 'zh-CN' ? '现在按中文识别对方的话' : '现在按英文识别对方的话');
-    flushRec();
-    cancelEarly();
-  });
 
   $('#chatInner').addEventListener('click', (e) => {
     const btn = e.target.closest('button[data-act]');
@@ -2192,8 +2148,6 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
     return 'Write one complete opening sentence that answers directly, then 3-6 lines, each starting with "• " and under 12 words, with the points to cover in order.';
   }
   function buildPrepPrompt(c) {
-    const interviewLang = S.hearLang === 'zh-CN' ? 'Chinese' : 'English';
-    const answerLang = S.replyLang === 'zh' ? 'Simplified Chinese' : S.replyLang === 'en' ? 'English' : interviewLang;
     const parts = [
       'Help a candidate prepare for a job interview. Use only facts from the resume; never invent experience, numbers or skills.',
       '', '<resume>', resumeOf(c), '</resume>',
@@ -2209,8 +2163,8 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
       'Reply with only a JSON object of this shape:',
       '{"stories": [{"title": "...", "text": "..."}], "questions": [{"q": "...", "qZh": "...", "a": "..."}]}',
       '- stories: the 4-6 experiences from the resume that best fit this job. For each, a short title and 3-5 sentences: the situation, what the candidate did (with the technical choices and the hardest problem, if the resume says), and the result, with numbers if the resume has them.',
-      '- questions: the 16 questions this interviewer is most likely to ask for this role: 3 about background and motivation (including why this company and role), 4 behavioral, 3 situational or emotional-intelligence (conflict, pressure, criticism, failure), 3 technical topics from the job description, and 3 detail follow-ups that dig into the candidate\'s main project (their exact part, how a result was measured, the hardest problem, what they would change). Write q in ' + interviewLang + ' as the interviewer would say it, and qZh as a short Simplified Chinese version.',
-      "- a: the candidate's answer in " + answerLang + ', in the first person, written to be spoken. ' + prepFormat(),
+      '- questions: the 16 questions this interviewer is most likely to ask for this role: 3 about background and motivation (including why this company and role), 4 behavioral, 3 situational or emotional-intelligence (conflict, pressure, criticism, failure), 3 technical topics from the job description, and 3 detail follow-ups that dig into the candidate\'s main project (their exact part, how a result was measured, the hardest problem, what they would change). Write q in English as the interviewer would say it, and qZh as a short Simplified Chinese version.',
+      "- a: the candidate's answer in English, in the first person, written to be spoken. " + prepFormat(),
       '- Whenever an answer or story needs a personal detail the resume does not give, do not invent it: write a short note in square brackets in Simplified Chinese telling the candidate what to fill in, such as [填：用的哪个型号].',
     );
     return parts.join('\n');
@@ -2271,7 +2225,7 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
   const wordCount = (s) => (tidy(s) ? '已写 ' + tidy(s).length.toLocaleString() + ' 字' : '');
   function fillSettings() {
     $('#profile').value = S.profile;
-    for (const name of ['hearLang', 'replyLang', 'length', 'style', 'pause', 'model', 'tier']) {
+    for (const name of ['length', 'style', 'pause', 'model', 'tier']) {
       for (const r of radios(name)) r.checked = String(S[name]) === r.value;
     }
     $('#gloss').checked = S.gloss;
@@ -2312,7 +2266,6 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
       S[t.name] = t.name === 'pause' ? Number(t.value) : t.value;
       savePrefs();
       applyPrefs();
-      if (t.name === 'hearLang') flushRec();
     } else if (t.id === 'gloss' || t.id === 'auto') {
       S[t.id] = t.checked;
       savePrefs();
@@ -2338,7 +2291,6 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
 
   // ---------- start ----------
   document.documentElement.lang = 'zh-CN';
-  $('#langBtn').hidden = IN_CLAUDE;   // keyboard dictation follows the keyboard's own language
   applyPrefs();
   writeJSON(PREFS_KEY, S);
   saveConvos(null);
