@@ -479,7 +479,7 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
         <div class="row stack">
           <span class="row-label" id="hearLangT">对方说的语言</span>
           <div class="seg" role="radiogroup" aria-labelledby="hearLangT">
-            <label><input type="radio" name="hearLang" value="en-US"><span>English</span></label>
+            <label><input type="radio" name="hearLang" value="en-US"><span>英文</span></label>
             <label><input type="radio" name="hearLang" value="zh-CN"><span>中文</span></label>
           </div>
         </div>
@@ -487,7 +487,7 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
           <span class="row-label" id="replyLangT">回答用的语言</span>
           <div class="seg" role="radiogroup" aria-labelledby="replyLangT">
             <label><input type="radio" name="replyLang" value="same"><span>跟对方一样</span></label>
-            <label><input type="radio" name="replyLang" value="en"><span>English</span></label>
+            <label><input type="radio" name="replyLang" value="en"><span>英文</span></label>
             <label><input type="radio" name="replyLang" value="zh"><span>中文</span></label>
           </div>
         </div>
@@ -840,7 +840,9 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
   function touch(c) { c.updatedAt = Date.now(); saveConvos(c); }
   function applyPrefs() {
     document.documentElement.style.setProperty('--read-size', S.fontSize + 'px');
-    $('#langBtn').textContent = S.hearLang === 'zh-CN' ? '中' : 'EN';
+    $('#langBtn').textContent = S.hearLang === 'zh-CN' ? '中' : '英';
+    const zhReply = S.replyLang === 'zh' || (S.replyLang === 'same' && S.hearLang === 'zh-CN');
+    $('.size-demo').textContent = zhReply ? '好的，我很乐意聊聊这个。' : "Sure — I'd be happy to talk about that.";
   }
 
   function switchConvo(c) {
@@ -1922,7 +1924,7 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
     savePrefs();
     applyPrefs();
     if (!convo.turns.length) renderAll();
-    note(S.hearLang === 'zh-CN' ? '现在按中文识别对方的话' : 'Now listening for English');
+    note(S.hearLang === 'zh-CN' ? '现在按中文识别对方的话' : '现在按英文识别对方的话');
     flushRec();
     cancelEarly();
   });
