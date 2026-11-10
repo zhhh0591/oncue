@@ -1152,11 +1152,12 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
   const sameWords = (a, b) => plain(a) === plain(b);   // recognizers fix punctuation and capitals once the speaker pauses
 
   // How long a pause means they're done: shorter after a question mark (iOS dictation adds them),
-  // longer when the words so far stop mid-phrase ("and", "about", "因为").
+  // longer when the words so far stop mid-phrase ("and", "about", "因为"). The app's recognizer guesses
+  // punctuation while the person is still talking ("what was the hardest? part"), so it waits one more word.
   const DANGLING = /\b(and|or|but|so|because|the|a|an|to|of|for|with|about|in|on|at|your|my|our|that|which|if|like|um|uh)[\s,]*$|(和|跟|还有|然后|就是|因为|所以|如果|的|在|对|把|还是|或者|呃|嗯)[\s，,]*$/i;
   function settleMs(text, base) {
     const t = tidy(text);
-    if (/[?？]$/.test(t)) return Math.min(base, 350);
+    if (/[?？]$/.test(t)) return Math.min(base, NATIVE ? 600 : 350);
     if (DANGLING.test(t)) return base * 2;
     return base;
   }
@@ -1329,7 +1330,7 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
     const settle = settleMs(sofar, S.pause * 1000);
     const waited = now - hear.changedAt;
     hear.silence = setTimeout(endUtterance, Math.max(0, settle - waited));
-    if (!early && settle > EARLY_MS + 250 && waited < EARLY_MS) {
+    if (!early && settle > EARLY_MS + 100 && waited < EARLY_MS) {
       hear.earlyTimer = setTimeout(() => startEarly(heardSoFar(), hear.startedAt), EARLY_MS - waited);
     }
   }
