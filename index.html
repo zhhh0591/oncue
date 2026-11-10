@@ -562,6 +562,10 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
   const IS_ANDROID = /Android/i.test(UA);
   const IS_IOS = /iPhone|iPad|iPod/i.test(UA) || (/Macintosh/.test(UA) && navigator.maxTouchPoints > 1);
   const IS_MOBILE = IS_ANDROID || IS_IOS;
+  // Inside the OnCue iPhone app, which listens with Apple's on-device recognizer and passes the words in.
+  const NATIVE = (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.oncue) || null;
+  // Safari doesn't give speech recognition to a site opened from a Home Screen icon as a web app.
+  const HOME_SCREEN_APP = !NATIVE && IS_IOS && (navigator.standalone === true || matchMedia('(display-mode: standalone)').matches);
   const MERGE_GAP_MS = 2500;   // speech that starts this soon after a question ended is the rest of that question
   const HISTORY_MS = 45 * 60 * 1000;
   const HISTORY_TURNS = 10;
@@ -1143,7 +1147,9 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
   // ---------- deciding what to answer ----------
   const ACKS = new Set(['ok', 'okay', 'yeah', 'yes', 'yep', 'yup', 'uh', 'um', 'uh huh', 'mm', 'mhm', 'hmm', 'right', 'sure', 'cool', 'great', 'nice', 'got it', 'i see',
     '嗯', '嗯嗯', '好', '好的', '对', '对对', '是', '是的', '行', '哦', '啊']);
-  const isAck = (text) => ACKS.has(text.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, '').replace(/\s+/g, ' ').trim());
+  const plain = (s) => String(s || '').toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, '').replace(/\s+/g, ' ').trim();
+  const isAck = (text) => ACKS.has(plain(text));
+  const sameWords = (a, b) => plain(a) === plain(b);   // recognizers fix punctuation and capitals once the speaker pauses
 
   // How long a pause means they're done: shorter after a question mark (iOS dictation adds them),
   // longer when the words so far stop mid-phrase ("and", "about", "因为").
@@ -1189,9 +1195,11 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
   }
   const bigrams = (t) => { const out = []; for (let i = 0; i + 1 < t.length; i++) out.push(t[i] + ' ' + t[i + 1]); return out; };
   // The phone also hears the user reading the reply aloud; skip text that mostly repeats a recent reply.
+  // Short phrases are left to the model: follow-up questions often reuse a few words of the answer
+  // ("what was the hardest part?").
   function isOwnVoice(text) {
     const spoken = bigrams(tokens(text));
-    if (spoken.length < 2) return false;
+    if (spoken.length < 5) return false;
     return convo.turns.slice(0, 4).some((t) => {
       if (!t.a) return false;
       const known = new Set(bigrams(tokens(splitAnswer(t.a).main)));
@@ -1255,7 +1263,7 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
   }
   function startEarly(text, startedAt) {
     if (engine.kind !== 'api' || !apiKey || !S.auto || mode !== 'voice') return;
-    if (early && early.text === text) return;
+    if (early && sameWords(early.text, text)) return;
     cancelEarly();
     if (!text || isOwnVoice(text) || isAck(text) || matchPrepared(convo, text)) return;
     const last = convo.turns[0];
@@ -1272,21 +1280,23 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
   function takeEarly(text) {
     const e = early;
     early = null;
-    if (e && e.text === text && !e.ctl.signal.aborted) return e;
+    if (e && sameWords(e.text, text) && !e.ctl.signal.aborted) return e;
     if (e) e.ctl.abort();
     return null;
   }
 
   // ---------- listening with the browser's speech recognition ----------
   const getSR = () => window.SpeechRecognition || window.webkitSpeechRecognition || null;
+  const canListen = () => !!NATIVE || !!getSR();
   const hear = {
     on: false, rec: null, running: false, flushing: false, warmed: false,
     carry: '', live: '', pending: '', startedAt: 0, since: 0, fails: 0, silence: 0, restart: 0, clock: 0,
-    recStartedAt: 0, gotResult: false, earlyTimer: 0,
+    recStartedAt: 0, gotResult: false, earlyTimer: 0, changedAt: 0,
   };
   const heardSoFar = () => joinText(hear.carry, hear.live);
-  const MIC_HELP = IS_ANDROID
-    ? '麦克风被拒绝了。点地址栏左边的图标，把麦克风改成允许，再点「开始听」。'
+  const MIC_HELP = NATIVE ? '麦克风被拒绝了。在 iPhone「设置」里找到 OnCue，打开麦克风，再点「开始听」。'
+    : HOME_SCREEN_APP ? '从主屏幕图标打开时，苹果不让网页用语音识别。请在 Safari 里打开这个网址，或者用 OnCue App。'
+    : IS_ANDROID ? '麦克风被拒绝了。点地址栏左边的图标，把麦克风改成允许，再点「开始听」。'
     : '麦克风或语音识别被拒绝了。在 iPhone「设置」里找到 Safari，把麦克风改成允许，并在「通用 → 键盘」打开「启用听写」，然后刷新页面。';
 
   function resultsText(results) {
@@ -1301,6 +1311,29 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
     return parts.reduce(joinText, '');
   }
 
+  // The words of the phrase so far. The pause timer runs from the last time the words changed, so a recognizer
+  // adding punctuation or capitals after the speaker stops doesn't make them wait longer.
+  function gotWords(text) {
+    if (!text) return;
+    const now = Date.now();
+    if (!hear.carry && !hear.live) hear.startedAt = now;
+    if (!sameWords(text, hear.live)) hear.changedAt = now;
+    hear.live = text;
+    hear.gotResult = true;
+    hear.fails = 0;
+    paintCaption();
+    clearTimeout(hear.silence);
+    clearTimeout(hear.earlyTimer);
+    const sofar = heardSoFar();
+    if (early && !sameWords(early.text, sofar)) cancelEarly();   // they kept talking
+    const settle = settleMs(sofar, S.pause * 1000);
+    const waited = now - hear.changedAt;
+    hear.silence = setTimeout(endUtterance, Math.max(0, settle - waited));
+    if (!early && settle > EARLY_MS + 250 && waited < EARLY_MS) {
+      hear.earlyTimer = setTimeout(() => startEarly(heardSoFar(), hear.startedAt), EARLY_MS - waited);
+    }
+  }
+
   // One recognizer per page, restarted after every phrase: phones stall or repeat text in continuous
   // mode, and iOS plays its start chime whenever a new recognizer is created.
   function makeRec() {
@@ -1310,20 +1343,7 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
     rec.maxAlternatives = 1;
     rec.onresult = (ev) => {
       if (hear.flushing || !hear.on) return;
-      const text = resultsText(ev.results);
-      if (!text) return;
-      if (!hear.carry && !hear.live) hear.startedAt = Date.now();
-      hear.live = text;
-      hear.gotResult = true;
-      hear.fails = 0;
-      paintCaption();
-      clearTimeout(hear.silence);
-      clearTimeout(hear.earlyTimer);
-      const sofar = heardSoFar();
-      if (early && early.text !== sofar) cancelEarly();   // they kept talking
-      const settle = settleMs(sofar, S.pause * 1000);
-      hear.silence = setTimeout(endUtterance, settle);
-      if (settle > EARLY_MS + 250) hear.earlyTimer = setTimeout(() => startEarly(heardSoFar(), hear.startedAt), EARLY_MS);
+      gotWords(resultsText(ev.results));
     };
     rec.onerror = (ev) => {
       if (!hear.on) return;
@@ -1375,25 +1395,50 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
     const wait = hear.fails ? Math.min(3000, 300 * 2 ** hear.fails) : 200;
     hear.restart = setTimeout(startRec, wait);
   }
+  // In the OnCue app the phone keeps recognizing for the whole interview and sends the words heard since the
+  // last cut; a cut starts the next phrase where the taken words ended, so nothing is lost or repeated.
+  // Words that arrive from before the latest start or cut are dropped.
+  const native = { session: 0, cuts: 0, t: 0, post(msg) { try { NATIVE.postMessage(msg); } catch {} } };
+  window.oncueNative = {
+    heard(text, t, session, cuts) {
+      if (!hear.on || session !== native.session || cuts !== native.cuts) return;
+      native.t = t;
+      gotWords(tidy(text));
+    },
+    status(kind, info) {
+      if (!hear.on) return;
+      if (kind === 'denied') giveUp(MIC_HELP);
+      else if (kind === 'unsupported') giveUp('这台 iPhone 不支持英文语音识别。');
+      else if (kind === 'failed') giveUp('语音识别出错了，已暂停' + (info ? '：' + info : '。'));
+      else if (kind === 'downloading') note('第一次用，正在下载英文语音模型 ' + info, 4000);
+      else if (kind === 'paused') note('麦克风被别的 App 占用了，结束后会接着听');
+    },
+  };
+
   async function startListening() {
-    if (!getSR()) {
+    if (!canListen()) {
       setMode('type');
-      note('这个浏览器不能语音识别：iPhone 请用 Safari，安卓请用 Chrome', 8000);
+      note(HOME_SCREEN_APP ? MIC_HELP : '这个浏览器不能语音识别：iPhone 请用 Safari，安卓请用 Chrome', 8000);
       return;
     }
     Object.assign(hear, { on: true, carry: '', live: '', pending: '', startedAt: 0, fails: 0, since: Date.now() });
     renderDock();
     paintCaption();
     updateStatus();
-    if (IS_IOS && !hear.warmed && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-      hear.warmed = true;   // asking for the mic first makes the first recognition on iPhone far more reliable
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        stream.getTracks().forEach((t) => t.stop());
-      } catch { giveUp(MIC_HELP); return; }
-      if (!hear.on) return;
+    if (NATIVE) {
+      Object.assign(native, { session: native.session + 1, cuts: 0, t: 0 });
+      native.post({ cmd: 'start', lang: 'en-US', session: native.session });
+    } else {
+      if (IS_IOS && !hear.warmed && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        hear.warmed = true;   // asking for the mic first makes the first recognition on iPhone far more reliable
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          stream.getTracks().forEach((t) => t.stop());
+        } catch { giveUp(MIC_HELP); return; }
+        if (!hear.on) return;
+      }
+      startRec();
     }
-    startRec();
     keepAwake(true);
     prewarm();
     clearInterval(hear.clock);
@@ -1408,7 +1453,8 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
     clearInterval(hear.clock);
     hear.carry = heardSoFar();
     hear.live = '';
-    flushRec();
+    if (NATIVE) native.post({ cmd: 'stop' });
+    else flushRec();
     keepAwake(false);
     renderDock();
     paintCaption();
@@ -1424,7 +1470,8 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
     const startedAt = hear.startedAt;
     hear.carry = hear.live = '';
     hear.startedAt = 0;
-    flushRec();   // a fresh session, so the next question doesn't repeat this one
+    if (NATIVE) native.post({ cmd: 'cut', t: native.t, cuts: ++native.cuts });
+    else flushRec();   // a fresh session, so the next question doesn't repeat this one
     return { text, startedAt };
   }
   function endUtterance() {
@@ -1457,7 +1504,7 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
     } catch { wakeLock = null; }
   }
   document.addEventListener('visibilitychange', () => {
-    if (!hear.on) return;
+    if (!hear.on || NATIVE) return;   // the app pauses and resumes its microphone itself
     if (document.hidden) { flushRec(); return; }   // recognition dies in the background anyway
     keepAwake(true);
     clearTimeout(hear.restart);
@@ -1506,7 +1553,7 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
     heard(text, { source: manual ? 'manual' : 'dictation', startedAt });
   }
 
-  let mode = IN_CLAUDE || !getSR() ? 'type' : 'voice';
+  let mode = IN_CLAUDE || !canListen() ? 'type' : 'voice';
   function setMode(next, focus) {
     if (next === mode) return;
     if (next === 'type' && hear.on) stopListening();
@@ -1831,7 +1878,7 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
   }
   function renderDock() {
     const typing = mode === 'type';
-    const canVoice = !IN_CLAUDE && !!getSR();
+    const canVoice = !IN_CLAUDE && canListen();
     const modeBtn = $('#modeBtn');
     modeBtn.hidden = !canVoice;
     modeBtn.innerHTML = typing ? ICONS.mic : ICONS.keyboard;
@@ -2238,6 +2285,7 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
     $('#pUploadStatus').textContent = wordCount(S.profile);
     $('#privacyNote').textContent = IN_CLAUDE
       ? '简历、对话资料和设置保存在你的 Claude 账号里，只有你能看到。识别出的文字和你的资料会发给 Claude 写回答。'
+      : NATIVE ? '简历、对话资料、设置和 API Key 只存在这台 iPhone 的 OnCue 里。录音不保存：iPhone 在本机把声音转成文字，文字和你的资料再发给 Anthropic 写回答。'
       : '简历、对话资料、设置和 API Key 只存在这台设备的浏览器里。录音不保存：浏览器自带的识别服务（iPhone 是苹果，安卓是谷歌）把声音转成文字，文字和你的资料再发给 Anthropic 写回答。';
   }
   function openSettings() { fillSettings(); showSheet(dlg); }
